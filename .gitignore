@@ -1,0 +1,70 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.db
+*.log
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Git
+.git/
+
+# Python (Backend & Worker)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node (Frontend)
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+frontend/.svelte-kit/
+frontend/.next/
+frontend/out/
+
+# Database / Local Storage data (Docker volumes / uploads)
+postgres_data/
+minio_data/
+redisinsight_data/
+worker/app/infrastructure/ai/model/
+*.wav
+*.mp3
+*.mp4
+*.webm
+
+# Environment Files (MUST ignore actual secrets, keep .env.example)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+worker/.env
+frontend/.env
