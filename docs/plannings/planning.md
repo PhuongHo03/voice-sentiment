@@ -2,64 +2,81 @@
 
 | Hạng mục | Trạng thái hiện tại |
 |---|---|
-| **Giai đoạn hiện tại** | ✅ Giai đoạn 2 — Loại bỏ hoàn toàn Mock, tích hợp local Whisper và remote LLM thực tế |
-| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 3 — Viết unit/integration tests và ổn định hóa hệ thống |
+| **Giai đoạn hiện tại** | ✅ Giai đoạn 4 — Dashboard Thống Kê & Đánh Giá Hiệu Suất Nhân Viên |
+| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 5 — Viết unit/integration tests tập trung và tối ưu hóa hiệu năng |
 | **Thư mục gốc workspace** | `D:\voice-sentiment` |
 
-## Cấu trúc Dự án
+---
+
+## Cấu Trúc Dự Án Hiện Tại (Decoupled Microservices)
 
 ```text
-backend/                  ← FastAPI API Gateway, điều phối công việc và migrations DB bằng Alembic
-worker/                   ← Dịch vụ xử lý AI nền với FFmpeg, local Whisper, và LLM clients (OpenAI-compatible)
-frontend/                 ← Giao diện Dashboard React/Vite
-docs/explanations/        ← Thư mục tài liệu giải thích chi tiết các khu vực
-docker-compose.yml        ← Tệp cấu hình khởi chạy toàn bộ hạ tầng dịch vụ cục bộ
-nginx.conf                ← File cấu hình Proxy ngược Nginx cục bộ
+├── voice-worker/         ← Dịch vụ ASR giải mã âm thanh stateless (FastAPI + local CPU Whisper)
+├── llm-worker/           ← Dịch vụ điều phối xử lý nền (RabbitMQ consumer + LLM client)
+├── backend/              ← FastAPI Gateway công khai, quản lý trạng thái metadata và migrations DB
+├── frontend/             ← Giao diện Admin Dashboard React/Vite/TypeScript trực quan
+├── docs/                 ← Thư mục tài liệu hướng dẫn và phân tích kiến trúc dự án
+│   ├── explanations/     ← Tài liệu chi tiết của từng thành phần (backend, frontend, worker, infra)
+│   └── plannings/        ← Tài liệu lộ trình và quy hoạch phát triển hệ thống
+├── docker-compose.yml    ← Khai báo toàn bộ hạ tầng microservices (Postgres, Redis, RabbitMQ, MinIO, Nginx...)
+└── nginx.conf            ← File cấu hình Reverse Proxy Nginx cục bộ trỏ cổng host 9090
 ```
 
-## Các công nghệ vận hành (Runtime stack)
+---
 
-- **PostgreSQL**: Lưu trữ thông tin bền vững công việc (jobs) và kết quả phân tích cuộc gọi thoại.
-- **MinIO**: Lưu trữ tệp tin đối tượng cho các file âm thanh ghi âm tải lên.
-- **Redis**: Bộ nhớ đệm cache nhanh trạng thái và kết quả công việc.
-- **RabbitMQ**: Bộ trung chuyển hàng đợi công việc từ Backend sang Worker.
-- **Nginx**: Proxy ngược cục bộ (hiện đang mở cổng truy cập host tại `8082`).
-- **Adminer**: Công cụ quản trị cơ sở dữ liệu PostgreSQL trực quan trên web (cổng `8083`).
-- **Redis Insight**: Công cụ quản trị bộ nhớ đệm Redis trực quan trên web (cổng `8084`).
-- **local Whisper (Internal)**: Dịch vụ nhận diện giọng nói tiếng Việt STT cục bộ chạy trên CPU (bằng thư viện `faster-whisper` lượng tử hóa `int8`).
-- **LLM (External)**: Đầu cuối mô hình LLM tương thích OpenAI (ví dụ vLLM chạy tại địa chỉ IP của bạn hoặc các dịch vụ đám mây khác) để tóm tắt và đánh giá sắc thái cảm xúc.
+## Các Công Nghệ Vận Hành (Runtime Stack)
 
-## Danh sách công việc tiếp theo (Next work)
+*   **PostgreSQL (`5432`)**: Lưu trữ bền vững dữ liệu nghiệp vụ cuộc gọi, bản ghi hội thoại và kết quả phân tích (bao gồm `agent_score`, `agent_advice_json`).
+*   **MinIO (`9000`, Console `9092`)**: Lưu trữ tệp tin đối tượng cho các file âm thanh ghi âm gốc.
+*   **Redis (`6379`, Insight `9093`)**: Lưu trữ bộ nhớ đệm cache trạng thái công việc để phản hồi UI siêu tốc.
+*   **RabbitMQ (`5672`, Console `9094`)**: Bộ trung chuyển hàng đợi tin nhắn không đồng bộ `analysis.jobs`.
+*   **Nginx Proxy (`9090`)**: Cổng ngõ vào (Gateway) duy nhất của hệ thống phục vụ Web UI và định tuyến các API backend.
+*   **Adminer (`9091`)**: Công cụ Web UI gọn nhẹ quản trị cơ sở dữ liệu PostgreSQL.
+*   **local Whisper (Cổng `9095` nội bộ `8000`)**: Máy chủ `voice-worker` chạy `faster-whisper` giải mã ASR trực tiếp trên CPU bằng lượng tử hóa `int8` cực kỳ tối ưu RAM.
+*   **Remote LLM (External)**: Đầu cuối mô hình LLM tương thích OpenAI chạy tại địa chỉ IP máy chủ của bạn (`192.168.2.74:8007`) đảm nhận phân tích sắc thái và đánh giá nhân viên.
 
-- [x] Chuyển đổi và đấu nối thành công mô hình nhận diện giọng nói tiếng Việt cục bộ bằng `faster-whisper` trên CPU của Worker.
-- [x] Đấu nối đầu cuối mô hình LLM bên ngoài và xác minh cổng API phân tích văn bản thực tế.
-- [x] Tích hợp bộ chuẩn hóa âm thanh (Audio normalization) cho các tệp ghi âm WebM trực tiếp từ Microphone trình duyệt sử dụng FFmpeg chạy tiến trình con (không tốn tài nguyên đĩa).
-- [x] Thiết lập hệ thống di cư cơ sở dữ liệu di động (Database Migrations) bằng Alembic và tự động áp dụng khi khởi chạy Backend.
-- [x] Loại bỏ hoàn toàn 100% tất cả mã nguồn liên quan đến giả lập "Mock" trong dự án.
-- [x] Chuẩn hóa toàn bộ các biến cấu hình hệ thống: `RIVA_*` thành `VOICE_*` và `VLLM_*` thành `LLM_*`.
-- [ ] Xây dựng bộ unit/integration tests tập trung cho backend, worker và frontend sau khi các giao thức đầu cuối hoạt động ổn định.
+---
 
-## Giai đoạn 1 — MVP scaffold
+## Danh Sách Công Việc Đã Hoàn Thành (Achievements)
 
-> Trạng thái: **Hoàn thành (Completed)**
-> Tài liệu đọc thêm cho các phiên sau: Xem [backend-explanation.md](file:///d:/voice-sentiment/docs/explanations/backend-explanation.md), [worker-explanation.md](file:///d:/voice-sentiment/docs/explanations/worker-explanation.md), [frontend-explanation.md](file:///d:/voice-sentiment/docs/explanations/frontend-explanation.md), và [infrastructure-explanation.md](file:///d:/voice-sentiment/docs/explanations/infrastructure-explanation.md).
+- [x] **Giai đoạn 1**: Xây dựng cấu trúc Clean Architecture cơ bản và kết nối bộ khung Docker Compose thô.
+- [x] **Giai đoạn 2**: Tích hợp mô hình cục bộ `faster-whisper` trên CPU, đấu nối LLM thực tế, loại bỏ hoàn toàn 100% Mock Fallback và cấu hình migrations DB tự động bằng Alembic.
+- [x] **Giai đoạn 2.5/3**:
+  - [x] Phân tách thành công nền tảng xử lý từ một background worker cồng kềnh thành bộ đôi độc lập: `voice-worker` (Stateless ASR) và `llm-worker` (Stateful Orchestrator).
+  - [x] Quy hoạch và đồng bộ dải cổng dịch vụ trên host liên tục từ **`9090` đến `9095`** giúp hệ thống cực kỳ khoa học và chuyên nghiệp.
+  - [x] Ẩn hoàn toàn các cổng container máy chủ ứng dụng `backend` (`8000`) và `frontend` (`5173`) để thiết lập bức tường lửa bảo mật thông qua Gateway Nginx (`9090`).
+  - [x] Tích hợp tự động nhận diện ngôn ngữ STT (`auto`) tăng tính linh hoạt khi giải mã hội thoại âm thanh.
+  - [x] Chạy kiểm thử tự động E2E thành công 100% trên cả 2 đường ống phân tích âm thanh và văn bản thực tế.
+- [x] **Giai đoạn 4**:
+  - [x] **Quản lý Phiên (Session Management)**: Thêm sidebar lịch sử phiên phân tích có thể tìm kiếm, đổi tên (inline rename), xoá từng phiên, và lọc theo từ khoá thông qua các API `GET /api/analysis`, `PATCH /api/analysis/{id}`, `DELETE /api/analysis/{id}`.
+  - [x] **Đánh Giá Nhân Viên (Agent Evaluation)**: LLM tự động tính điểm nhân viên (`agent_score` 0–10) và sinh lời khuyên hành động (`agent_advice`) sau mỗi cuộc gọi. Kết quả lưu vào cột `agent_score` và `agent_advice_json` của bảng `analysis_results` qua migration Alembic `0003_add_agent_evaluation.py`.
+  - [x] **Dashboard Thống Kê**: Thêm nút "Phân tích cuộc gọi" trên sidebar để chuyển sang chế độ xem Dashboard hiển thị biểu đồ vòng sắc thái (SVG donut), phân phối điểm nhân viên (bar chart), và xu hướng phân tích theo tuần.
+  - [x] **API Thống Kê**: Thêm endpoint `GET /api/analysis/stats` trả về dữ liệu tổng hợp gồm số lượng phân tích, phân phối sentiment, điểm nhân viên trung bình, và xu hướng 7 ngày gần nhất.
+  - [x] **UX Cải Tiến**: Đổi biểu tượng "Phân tích cuộc gọi" thành icon SVG phù hợp hơn; sửa lỗi CSS khung bao quanh nhỏ khi chọn item trong sidebar.
+  - [x] **Chẩn đoán Lỗi STT Timeout**: Xác định và hướng dẫn xử lý lỗi `Voice-worker STT service connection failed: timed out` khi voice-worker chưa sẵn sàng hoặc quá tải.
 
-Phạm vi triển khai:
-- Chia nhỏ cấu trúc thư mục Clean Architecture cho cả backend và worker.
-- Dựng giao diện Dashboard React thô cho phép tải file, ghi âm microphone, gửi test nhanh văn bản và polling cập nhật.
-- Dựng file compose điều phối PostgreSQL, MinIO, Redis, RabbitMQ, Nginx, backend, worker, frontend cục bộ.
-- Thiết lập quyền sở hữu file cấu hình môi trường mẫu `.env.example` riêng biệt cho từng service.
+---
 
-## Giai đoạn 2 — Tích hợp ASR/LLM thực tế & Loại bỏ hoàn toàn Mock Fallback
+## Lộ Trình Chi Tiết Các Giai Đoạn
 
-> Trạng thái: **Hoàn thành (Completed)**
-> Tài liệu đọc thêm cho các phiên sau: Xem [backend-explanation.md](file:///d:/voice-sentiment/docs/explanations/backend-explanation.md), [worker-explanation.md](file:///d:/voice-sentiment/docs/explanations/worker-explanation.md), [frontend-explanation.md](file:///d:/voice-sentiment/docs/explanations/frontend-explanation.md), và [infrastructure-explanation.md](file:///d:/voice-sentiment/docs/explanations/infrastructure-explanation.md).
+### Giai đoạn 1 — MVP Scaffold (Hoàn thành)
+Thiết lập bộ khung Clean Architecture thô, cấu hình Docker Compose ban đầu, tạo giao diện thô cho phép ghi âm và hiển thị kết quả.
 
-Phạm vi triển khai:
-- Loại bỏ hoàn toàn Riva STT và thay bằng mô hình **local `faster-whisper` (CPU int8)**, tích hợp bộ giải mã `ffmpeg` trực tiếp vào Docker image của Worker.
-- Xây dựng bộ chuẩn hóa âm thanh tự động chuyển đổi mọi tệp tin đầu vào (webm, mp3, wav) thành linear PCM, mono, 16kHz, 16-bit WAV bytes cực kỳ mượt mà.
-- Thiết lập kết nối LLM thực tế thông qua các biến cấu hình `LLM_*` trỏ trực tiếp đến mô hình tương thích với OpenAI bên ngoài.
-- Dọn dẹp 100% tất cả logic kiểm tra mock, xóa bỏ các cuộc hội thoại mock giả lập và biến cấu hình mock dư thừa.
-- Đổi tên toàn bộ hệ thống biến liên quan đến Riva thành `VOICE` (như `VOICE_SERVER_URI`, `VOICE_LANGUAGE_CODE`) và các biến vLLM thành `LLM` (như `LLM_BASE_URL`, `LLM_MODEL`).
-- Cấu hình logs thời gian thực không đệm (`PYTHONUNBUFFERED=1` và `logging.basicConfig`) giúp quản trị container dễ dàng qua Docker logs.
-- Tích hợp thành công Alembic quản lý di cư cơ sở dữ liệu cho PostgreSQL, tự động cập nhật schema lên phiên bản mới nhất `0001` khi bắt đầu chạy.
+### Giai đoạn 2 — Tích Hợp ASR/LLM Thực Tế & Loại Bỏ Mock (Hoàn thành)
+Thay thế Riva bằng `faster-whisper` trên CPU cục bộ, chuẩn hóa âm thanh đầu vào WebM từ microphone bằng FFmpeg pipe, đấu nối OpenAI-compatible API bên ngoài, đồng bộ hóa database PostgreSQL tự động qua Alembic khi khởi tạo container, loại bỏ hoàn toàn dữ liệu giả lập.
+
+### Giai đoạn 3 — Phân Tách Worker & Quy Hoạch Dải Cổng 9090-9095 (Hoàn thành)
+*   Tách dịch vụ AI thành `voice-worker` (stateless API phục vụ chung cho cả mạng nội bộ) và `llm-worker` (orchestration xử lý nền không phơi cổng).
+*   Ánh xạ toàn bộ cổng host sang dải liên tục bảo mật `9090-9095`.
+*   Kiểm chứng toàn bộ luồng hoạt động thông qua kịch bản `verify.py` đạt hiệu năng xử lý cực cao nhờ cơ chế in-memory caching mô hình Whisper của `voice-worker`.
+
+### Giai đoạn 4 — Dashboard Thống Kê & Đánh Giá Nhân Viên (Hoàn thành)
+*   **Cơ sở dữ liệu**: Thêm migration `0003_add_agent_evaluation.py` bổ sung cột `agent_score` (INT) và `agent_advice_json` (JSONB) vào `analysis_results`.
+*   **Backend API mới**: Endpoint `GET /api/analysis/stats` tổng hợp phân phối sentiment, điểm nhân viên, và xu hướng 7 ngày; `GET /api/analysis` danh sách phiên; `PATCH` đổi tên; `DELETE` xoá phiên.
+*   **LLM Worker**: Cập nhật prompt yêu cầu LLM trả về thêm `agent_score` và `agent_advice` trong JSON; lưu vào DB sau phân tích.
+*   **Frontend Dashboard**: Thêm panel sidebar lịch sử phiên (search, rename, delete); thêm tab Dashboard thống kê với biểu đồ SVG donut, bar chart, và weekly trends; thêm thẻ Scorecard nhân viên hiển thị điểm vòng tròn động và lời khuyên từ AI.
+
+### Giai đoạn 5 — Viết Unit/Integration Tests & Ổn Định Hệ Thống (Kế hoạch tiếp theo)
+*   **Unit Tests**: Viết kiểm thử thành phần cho các Repositories, Use Cases, và AI Clients của cả `backend`, `voice-worker`, và `llm-worker`.
+*   **Integration Tests**: Giả lập các luồng gửi tin nhắn RabbitMQ bị ngắt quãng, mất kết nối cơ sở dữ liệu PostgreSQL/Redis để củng cố độ bền bỉ (resilience) của Worker.
+*   **Load Testing**: Đo lường thời gian xử lý khi gửi liên tục nhiều yêu cầu chuyển giọng nói cùng lúc lên `voice-worker` để đánh giá khả năng chịu tải trên CPU máy chủ.

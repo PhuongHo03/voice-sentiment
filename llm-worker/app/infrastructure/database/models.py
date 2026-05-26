@@ -14,7 +14,6 @@ class AnalysisJobModel(Base):
     __tablename__ = "analysis_jobs"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    name: Mapped[str | None] = mapped_column(String(256))
     input_type: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     audio_object_key: Mapped[str | None] = mapped_column(String(512))
@@ -22,7 +21,7 @@ class AnalysisJobModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    result: Mapped["AnalysisResultModel | None"] = relationship(back_populates="job", cascade="all, delete-orphan")
+    result: Mapped["AnalysisResultModel | None"] = relationship(back_populates="job")
 
 
 class AnalysisResultModel(Base):

@@ -18,7 +18,7 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9092:9001"
     volumes:
       - minio_data:/data
 
@@ -31,22 +31,12 @@ services:
     image: rabbitmq:3-management-alpine
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "9094:15672"
 
   backend:
     build: ./backend
     env_file: ./backend/.env
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-      - minio
-      - redis
-      - rabbitmq
-
-  worker:
-    build: ./worker
-    env_file: ./worker/.env
+    # Host port hidden for production-grade security (Only exposed internally to Nginx on port 8000)
     depends_on:
       - postgres
       - minio
@@ -56,17 +46,14 @@ services:
   frontend:
     build: ./frontend
     env_file: ./frontend/.env
-
-    ports:
-      - "5173:5173"
+    # Host port hidden for production-grade security (Only exposed internally to Nginx on port 5173)
     depends_on:
       - backend
 
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "8082:80"
-
+      - "9090:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -76,21 +63,35 @@ services:
   adminer:
     image: adminer:latest
     ports:
-      - "8083:8080"
+      - "9091:8080"
     depends_on:
       - postgres
 
   redisinsight:
     image: redis/redisinsight:latest
     ports:
-      - "8084:8001"
+      - "9093:5540"
     volumes:
       - redisinsight_data:/data
     depends_on:
       - redis
 
+
+  voice-worker:
+    build: ./voice-worker
+    env_file: ./voice-worker/.env
+    ports:
+      - "9095:8000"
+
+  llm-worker:
+    build: ./llm-worker
+    env_file: ./llm-worker/.env
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
 volumes:
   postgres_data:
   minio_data:
   redisinsight_data:
-

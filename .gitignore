@@ -1,10 +1,13 @@
+# ============================================================
 # Operating System Files
+# ============================================================
 .DS_Store
 Thumbs.db
-*.db
 *.log
 
+# ============================================================
 # IDEs and Editors
+# ============================================================
 .idea/
 .vscode/
 *.suo
@@ -13,10 +16,9 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Git
-.git/
-
-# Python (Backend & Worker)
+# ============================================================
+# Python (Backend, llm-worker, voice-worker)
+# ============================================================
 __pycache__/
 *.pyc
 *.pyo
@@ -41,30 +43,62 @@ var/
 .installed.cfg
 *.egg
 
+# ============================================================
 # Node (Frontend)
+# ============================================================
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 frontend/tsconfig.tsbuildinfo
 frontend/.svelte-kit/
 frontend/.next/
 frontend/out/
 
-# Database / Local Storage data (Docker volumes / uploads)
+# ============================================================
+# Docker / Local Volume Data
+# ============================================================
 postgres_data/
 minio_data/
 redisinsight_data/
-worker/app/infrastructure/ai/model/
+
+# ============================================================
+# AI Model Files (large, not committed)
+# ============================================================
+voice-worker/app/infrastructure/ai/model/
+llm-worker/app/infrastructure/ai/model/
+
+# ============================================================
+# Audio & Media Upload Files
+# ============================================================
 *.wav
 *.mp3
 *.mp4
 *.webm
+*.ogg
+*.flac
 
-# Environment Files (MUST ignore actual secrets, keep .env.example)
+# ============================================================
+# Database files
+# ============================================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# Environment Files
+# NEVER commit real .env files — only .env.example is tracked
+# ============================================================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Service-specific env files (real secrets)
 backend/.env
-worker/.env
+llm-worker/.env
+voice-worker/.env
 frontend/.env
+
+# Legacy (old worker/ directory — now replaced by llm-worker/ & voice-worker/)
+worker/.env

@@ -8,6 +8,7 @@ class SubmitTextAnalysis:
         self.publisher = publisher
 
     def execute(self, text: str) -> dict:
-        job = self.repository.create_text_job(text)
+        name = text[:60] + "..." if len(text) > 60 else text
+        job = self.repository.create_text_job(text, name=name)
         self.publisher.publish({"job_id": str(job.id), "input_type": "text", "text": text})
         return {"job_id": str(job.id), "status": job.status}

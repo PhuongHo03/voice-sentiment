@@ -2,36 +2,117 @@
 
 ## Mục đích
 
-Hạ tầng vận hành của dự án được khai báo toàn bộ trong file `docker-compose.yml` ở thư mục gốc. Dự án được thiết kế tinh gọn và cố ý không sử dụng thư mục cấu hình `infra/` riêng biệt.
+Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập trung và tối ưu hóa trong tệp tin `docker-compose.yml` nằm ở thư mục gốc của dự án. Hệ thống được thiết kế theo mô hình microservices cô lập mạng nội bộ, chia sẻ liên thông qua Docker bridge network, và chỉ mở các cổng quản trị cần thiết ra máy chủ (host) để bảo mật tối đa.
 
-## Các Dịch vụ (Services)
+---
 
-| Tên Dịch vụ | Cổng (Port) | Mục đích vận hành |
-|---|---:|---|
-| **PostgreSQL** | 5432 | Lưu trữ bền vững thông tin công việc (job) và kết quả phân tích |
-| **MinIO** | 9000, 9001 | Lưu trữ đối tượng (Object Storage) cho các file âm thanh đầu vào và trang Console quản lý |
-| **Redis** | 6379 | Bộ nhớ đệm (cache) truy vấn nhanh trạng thái và kết quả phân tích công việc |
-| **RabbitMQ** | 5672, 15672 | Hàng đợi trung chuyển công việc (Broker) và trang quản lý Management UI |
-| **Backend** | 8000 | API FastAPI công khai phục vụ giao tiếp giao diện |
-| **Frontend** | 5173 | Máy chủ chạy thử nghiệm môi trường phát triển Vite |
-| **Nginx** | 8082 | Cổng Proxy ngược (Reverse Proxy) điều hướng tích hợp cho Frontend/Backend (chuyển từ cổng gốc 8080 để tránh xung đột cổng trên máy chủ gốc) |
-| **Adminer** | 8083 | Giao diện quản trị PostgreSQL trực quan trên nền Web |
-| **Redis Insight** | 8084 | Giao diện quản trị Redis trực quan chính thức trên nền Web |
+## Danh Sách Các Cổng Dịch Vụ Trên Host (Unified Port Mapping)
 
+Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, toàn bộ các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào API đều được quy hoạch đồng bộ vào dải cổng liên tục từ **`9090` đến `9095`**:
 
-## Luồng dữ liệu hạ tầng (Flow)
+| Dịch vụ Container | Cổng Host | Cổng Container | Phạm vi / Mục đích |
+|:---|:---:|:---:|:---|
+| **Nginx Proxy** | **`9090`** | `80` | **Ngõ vào duy nhất** cho giao diện Frontend UI và API Backend |
+| **Adminer** | **`9091`** | `8080` | Trình quản trị cơ sở dữ liệu PostgreSQL trực quan trên Web |
+| **MinIO Console** | **`9092`** | `9001` | Trang quản trị giao diện (Console) bộ lưu trữ đối tượng S3 |
+| **RedisInsight** | **`9093`** | `8001` | Giao diện giám sát bộ nhớ đệm nhanh Redis |
+| **RabbitMQ Admin** | **`9094`** | `15672` | Trang quản trị hàng đợi công việc (RabbitMQ Management) |
+| **`voice-worker` API** | **`9095`** | `8000` | FastAPI Web Server cung cấp API giải mã ASR/STT độc lập |
 
-Giao diện Frontend gọi API Backend thông qua cổng Nginx ngược (`8082`). Backend thực hiện lưu trữ file âm thanh đầu vào vào MinIO, ghi nhận thông tin công việc vào PostgreSQL, xuất bản tin nhắn công việc vào RabbitMQ, và cập nhật trạng thái cache nhanh sang Redis.
-Dịch vụ Worker tiêu thụ hàng đợi RabbitMQ, tải file âm thanh tương ứng từ MinIO, cập nhật trạng thái vào PostgreSQL/Redis, và thực hiện chuyển đổi giọng nói bằng mô hình local Whisper kết hợp gửi phân tích văn bản tới mô hình LLM tương thích OpenAI bên ngoài.
+Các cổng giao thức kỹ thuật tiêu chuẩn của hạ tầng vẫn được giữ nguyên mặc định để phục vụ các kết nối client bên ngoài (như DBeaver, Redis CLI, S3 SDK, v.v.):
+*   **PostgreSQL**: Cổng **`5432`**
+*   **Redis**: Cổng **`6379`**
+*   **MinIO S3 API**: Cổng **`9000`**
+*   **RabbitMQ Protocol**: Cổng **`5672`**
 
-## Các Lệnh Vận Hành Cơ Bản
+---
 
-```powershell
-# Kiểm tra cấu hình Docker Compose hoạt động
-docker compose config
+## 🔒 Cô Lập Ứng Dụng Nghiệp Vụ (Application Hiding & Security)
 
-# Khởi chạy và build lại toàn bộ hạ tầng cục bộ
-docker compose up --build
+> [!CAUTION]
+> **Core Isolation**: Nhằm tuân thủ nguyên tắc bảo mật thông tin trong môi trường phân tán doanh nghiệp, cổng truy cập trực tiếp của hai dịch vụ ứng dụng cốt lõi:
+> 1.  **`backend`** (`8000`)
+> 2.  **`frontend`** (`5173`)
+>
+> đã bị **loại bỏ hoàn toàn khỏi khai báo ánh xạ cổng (ports mapping) ra host** trong tệp `docker-compose.yml`. Mọi nỗ lực truy cập trực tiếp vào các dịch vụ này từ máy khách đều bị chặn đứng ở tầng mạng Docker. Mọi lưu lượng truy cập bắt buộc phải đi qua **Nginx Gateway (cổng `9090`)** để được định tuyến an toàn.
+
+---
+
+## Luồng Dữ Liệu Hạ Tầng (Flow)
+
+```text
+[Trình duyệt] ──► (Cổng 9090) Nginx Proxy
+                        │
+                        ├──► [frontend:5173]  (Tải giao diện Dashboard React)
+                        └──► [backend:8000]   (Giao dịch API nghiệp vụ)
+                                  │
+                                  ├──► [PostgreSQL:5432]  (Đọc/Ghi Jobs, Results, agent_score)
+                                  ├──► [MinIO:9000]       (Lưu tệp tin âm thanh uploads)
+                                  ├──► [Redis:6379]       (Bộ nhớ đệm đọc kết quả nhanh)
+                                  └──► [RabbitMQ:5672]    (Đẩy tin nhắn Jobs vào hàng đợi)
+                                            │
+                                            └──► [llm-worker]  (Consumes Jobs không cổng)
+                                                     │
+                                                     ├──► [MinIO:9000]         (Tải audio gốc)
+                                                     ├──► [voice-worker:8000]  (HTTP POST giải mã ASR)
+                                                     ├──► [Remote LLM:8007]    (HTTP POST phân tích + đánh giá nhân viên)
+                                                     └──► Ghi kết quả vào Postgres & Redis cache
 ```
 
-*Tài liệu phản ánh trạng thái infrastructure tại giai đoạn hoàn thành Giai đoạn 2.*
+---
+
+## Hướng Dẫn Sử Dụng RabbitMQ Management UI
+
+Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
+
+| Mục | Nơi kiểm tra | Ý nghĩa |
+|---|---|---|
+| **Queues** → `analysis.jobs` | Tab "Queues" | Xem số tin nhắn đang chờ (Ready), đang xử lý (Unacked), và tổng (Total) |
+| **Messages** | Nút "Get messages" trong queue | Xem nội dung raw của từng tin nhắn trong hàng đợi |
+| **Connections** | Tab "Connections" | Xem kết nối từ `llm-worker` tới RabbitMQ |
+| **Channels** | Tab "Channels" | Xem channel consumer đang lắng nghe |
+
+> [!TIP]
+> Nếu cột **Unacked > 0** kéo dài mà không giảm về 0, có thể `llm-worker` đang xử lý nhưng bị treo. Kiểm tra log bằng `docker compose logs -f llm-worker` để xác định nguyên nhân.
+
+---
+
+## Công Cụ Giám Sát & Quản Trị
+
+| Công cụ | URL | Tài khoản | Mục đích |
+|---|---|---|---|
+| **Nginx Gateway** | http://localhost:9090 | — | Frontend UI + API routing |
+| **Adminer** | http://localhost:9091 | postgres/postgres | Quản trị DB trực quan |
+| **MinIO Console** | http://localhost:9092 | minioadmin/minioadmin | Xem/xoá file âm thanh |
+| **RedisInsight** | http://localhost:9093 | — | Giám sát keys Redis cache |
+| **RabbitMQ** | http://localhost:9094 | guest/guest | Giám sát hàng đợi công việc |
+| **voice-worker API** | http://localhost:9095/docs | — | Swagger docs ASR API |
+
+---
+
+## Các Lệnh Vận Hành Hạ Tầng
+
+```powershell
+# Kiểm tra file cấu hình Docker Compose hoạt động và phân tách đúng cú pháp
+docker compose config
+
+# Khởi chạy và biên dịch lại toàn bộ hạ tầng (bao gồm cả voice-worker và llm-worker)
+docker compose up -d --build
+
+# Chỉ rebuild một dịch vụ cụ thể (nhanh hơn)
+docker compose up --build -d backend
+docker compose up --build -d llm-worker
+docker compose up --build -d frontend
+
+# Kiểm tra log thời gian thực của cụm microservices xử lý AI nền
+docker compose logs -f voice-worker llm-worker
+
+# Kiểm tra trạng thái tất cả containers
+docker compose ps
+
+# Dừng và xoá toàn bộ hạ tầng (giữ lại volumes DB)
+docker compose down
+
+# Xoá hoàn toàn bao gồm volumes (reset DB)
+docker compose down -v
+```

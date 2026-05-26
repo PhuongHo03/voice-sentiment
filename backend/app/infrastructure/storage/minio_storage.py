@@ -17,3 +17,10 @@ class MinioAudioStorage:
         object_key = f"uploads/{uuid4()}.{suffix}"
         self.client.put_object(settings.minio_bucket, object_key, BytesIO(content), length=len(content), content_type=content_type)
         return object_key
+
+    def delete(self, object_key: str) -> None:
+        try:
+            self.client.remove_object(settings.minio_bucket, object_key)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to delete object {object_key} from Minio: {str(e)}")
