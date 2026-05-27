@@ -108,6 +108,15 @@ class LlmTextAnalyticsClient:
             "Nhiệm vụ của bạn là đọc đoạn hội thoại dưới đây và thực hiện:\n"
             "1. Phân tích sắc thái và tóm tắt cuộc gọi.\n"
             "2. Đánh giá khách quan chất lượng hỗ trợ của Nhân viên (thang điểm 100) và đưa ra 2-4 lời khuyên hành động cụ thể để lần sau họ phục vụ khách hàng tốt hơn.\n\n"
+            "QUY TẮC ĐÁNH GIÁ ĐIỂM NHÂN VIÊN (agent_score - Thang điểm 100):\n"
+            "- agent_score đại diện cho CHẤT LƯỢNG HỖ TRỢ của Nhân viên, chứ không phải tâm trạng của Khách hàng.\n"
+            "- Nếu cuộc gọi quá ngắn hoặc KHÔNG CÓ bất kỳ lượt nói nào của Nhân viên (chỉ có Khách hàng nói một mình):\n"
+            "  * Gán điểm mặc định là 80 nếu sắc thái cuộc gọi là Tích cực hoặc Trung lập (chưa thể hiện lỗi gì của nhân viên).\n"
+            "  * Gán điểm mặc định là 50 nếu sắc thái cuộc gọi là Tiêu cực (nhắc nhở nhân viên cần chủ động phản hồi xoa dịu khách), tuyệt đối KHÔNG được đánh giá 0 hoặc 100 điểm một cách tùy tiện.\n"
+            "- Nếu cuộc gọi có đầy đủ tương tác:\n"
+            "  * Sắc thái Trung lập (Neutral): Điểm nhân viên nên nằm trong khoảng 70 - 85, trừ khi nhân viên làm việc xuất sắc (90+) hoặc tệ hại (dưới 50). Không cho 0 hay 100 điểm một cách vô lý.\n"
+            "  * Sắc thái Tiêu cực (Negative): Nếu khách hàng giận dữ về sản phẩm nhưng Nhân viên vẫn lịch sự, bình tĩnh hỗ trợ đúng quy trình, điểm của nhân viên vẫn phải ở mức Khá (70 - 85). Không đánh giá 0 điểm trừ khi nhân viên thô lỗ, cãi cọ hoặc phớt lờ khách hàng.\n"
+            "  * Sắc thái Tích cực (Positive): Điểm nhân viên xứng đáng ở mức 80 - 100.\n\n"
             "Đọc đoạn hội thoại dưới đây và trả về DUY NHẤT một chuỗi JSON hợp lệ "
             "(không kèm markdown, không kèm giải thích ngoài lề) với cấu trúc chính xác:\n"
             "{\n"
@@ -120,6 +129,7 @@ class LlmTextAnalyticsClient:
             "}\n\n"
             f"Hội thoại:\n{analysis_text}"
         )
+
  
         try:
             analysis_response = self._call_llm(base_url, analysis_prompt)
@@ -166,6 +176,15 @@ class LlmTextAnalyticsClient:
             "2. Một người nói có thể nói liên tục trong nhiều Index tiếp diễn.\n"
             "3. Phân tích thật kỹ ngữ nghĩa toàn bộ cuộc gọi để phân loại chính xác từng dòng.\n"
             "4. Đánh giá khách quan chất lượng hỗ trợ của Nhân viên (thang điểm 100) và đưa ra 2-4 lời khuyên hành động cụ thể để lần sau họ phục vụ khách hàng tốt hơn.\n\n"
+            "QUY TẮC ĐÁNH GIÁ ĐIỂM NHÂN VIÊN (agent_score - Thang điểm 100):\n"
+            "- agent_score đại diện cho CHẤT LƯỢNG HỖ TRỢ của Nhân viên, chứ không phải tâm trạng của Khách hàng.\n"
+            "- Nếu cuộc gọi quá ngắn hoặc KHÔNG CÓ bất kỳ lượt nói nào của Nhân viên (chỉ có Khách hàng nói một mình):\n"
+            "  * Gán điểm mặc định là 80 nếu sắc thái cuộc gọi là Tích cực hoặc Trung lập (chưa thể hiện lỗi gì của nhân viên).\n"
+            "  * Gán điểm mặc định là 50 nếu sắc thái cuộc gọi là Tiêu cực (nhắc nhở nhân viên cần chủ động phản hồi xoa dịu khách), tuyệt đối KHÔNG được đánh giá 0 hoặc 100 điểm một cách tùy tiện.\n"
+            "- Nếu cuộc gọi có đầy đủ tương tác:\n"
+            "  * Sắc thái Trung lập (Neutral): Điểm nhân viên nên nằm trong khoảng 70 - 85, trừ khi nhân viên làm việc xuất sắc (90+) hoặc tệ hại (dưới 50). Không cho 0 hay 100 điểm một cách vô lý.\n"
+            "  * Sắc thái Tiêu cực (Negative): Nếu khách hàng giận dữ về sản phẩm nhưng Nhân viên vẫn lịch sự, bình tĩnh hỗ trợ đúng quy trình, điểm của nhân viên vẫn phải ở mức Khá (70 - 85). Không đánh giá 0 điểm trừ khi nhân viên thô lỗ, cãi cọ hoặc phớt lờ khách hàng.\n"
+            "  * Sắc thái Tích cực (Positive): Điểm nhân viên xứng đáng ở mức 80 - 100.\n\n"
             "Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ với định dạng chính xác như sau (không kèm markdown, không kèm giải thích ngoài lề):\n"
             "{\n"
             '  "summary": ["tóm tắt ý 1", "tóm tắt ý 2"],\n'

@@ -2,8 +2,8 @@
 
 | Hạng mục | Trạng thái hiện tại |
 |---|---|
-| **Giai đoạn hiện tại** | ✅ Giai đoạn 4 — Dashboard Thống Kê & Đánh Giá Hiệu Suất Nhân Viên |
-| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 5 — Viết unit/integration tests tập trung và tối ưu hóa hiệu năng |
+| **Giai đoạn hiện tại** | ✅ Giai đoạn 6 — Phân Tách Cô Lập Hạ Tầng (Tenant-Isolated) & Đa Hàng Đợi |
+| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 7 — Viết Unit/Integration Tests & Ổn Định Hệ Thống |
 | **Thư mục gốc workspace** | `D:\voice-sentiment` |
 
 ---
@@ -76,7 +76,37 @@ Thay thế Riva bằng `faster-whisper` trên CPU cục bộ, chuẩn hóa âm t
 *   **LLM Worker**: Cập nhật prompt yêu cầu LLM trả về thêm `agent_score` và `agent_advice` trong JSON; lưu vào DB sau phân tích.
 *   **Frontend Dashboard**: Thêm panel sidebar lịch sử phiên (search, rename, delete); thêm tab Dashboard thống kê với biểu đồ SVG donut, bar chart, và weekly trends; thêm thẻ Scorecard nhân viên hiển thị điểm vòng tròn động và lời khuyên từ AI.
 
-### Giai đoạn 5 — Viết Unit/Integration Tests & Ổn Định Hệ Thống (Kế hoạch tiếp theo)
+### Giai đoạn 5 — Xác Thực, Phân Quyền (RBAC) & Dashboard Quản Trị Admin (Hoàn thành)
+*   **Cơ sở dữ liệu (Database Schema)**:
+    *   Thiết kế bảng riêng `roles` (`id`, `name`, `description`) để quản lý nghiêm ngặt vai trò tài khoản (các vai trò mặc định: `admin`, `employee`).
+    *   Thiết kế bảng `users` (`id`, `username`, `email`, `hashed_password`, `role_id`, `created_at`, `is_active`) liên kết khoá ngoại với bảng `roles`.
+    *   Bổ sung khoá ngoại `owner_id` vào bảng `analysis_jobs` (liên kết với bảng `users`) thông qua migrations Alembic. Mỗi tài khoản người dùng (bao gồm cả tài khoản nhân viên thường và tài khoản admin) đều sở hữu tập hợp các phiên (`sessions`) phân tích và biểu đồ dashboard cá nhân hoàn toàn độc lập.
+*   **Backend Auth & Phân quyền API**:
+    *   Đăng ký & Đăng nhập: Cung cấp các endpoint công khai `POST /api/auth/register` và `POST /api/auth/login` cấp mã JWT Token bảo mật. Tự động liên kết vai trò mặc định khi đăng ký.
+    *   Phòng vệ API: Xây dựng FastAPI dependency `get_current_user` phục vụ việc giải mã Token, trích xuất thông tin người dùng và xác thực quyền hạn.
+    *   Cách ly dữ liệu cá nhân: Mọi tài khoản (cả nhân viên lẫn admin) khi gọi API phân tích `GET /api/analysis`, `POST /api/analysis` hoặc truy vấn stats cá nhân `GET /api/analysis/stats` đều chỉ thao tác trên các phiên do chính mình sở hữu (`owner_id = current_user.id`).
+    *   API Admin quản lý tiến độ: Endpoint `GET /api/admin/employees` trả về thông tin danh sách nhân viên kèm thống kê tiến độ làm việc, điểm số trung bình, và hiệu năng tổng quát.
+*   **Giao diện Đăng nhập & Đăng ký (Frontend Auth)**:
+    *   Trang Login/Register chuyên nghiệp sử dụng CSS thuần tuý, đồng bộ với thiết kế giao diện tối (dark mode) sang trọng hiện tại.
+    *   Tích hợp Auth Context/State quản lý trạng thái đăng nhập, tự động đính kèm Token vào HTTP Header cho mọi cuộc gọi API.
+    *   Định tuyến bảo vệ (Protected Routes): Điều hướng người dùng chưa đăng nhập về trang Login; ngăn chặn Nhân viên truy cập trái phép vào các trang quản trị của Admin.
+*   **Giao diện Dashboard Admin Quản lý Tiến độ**:
+    *   Phân tách rõ ràng: Tài khoản Admin sẽ có đầy đủ **Dashboard cá nhân riêng** (hiển thị thống kê các cuộc gọi/phân tích do chính admin thực hiện) giống như một nhân viên, và **Dashboard quản trị tiến độ nhân viên riêng**.
+    *   Bảng theo dõi tổng quan tiến độ (Overview Grid): Dành riêng cho vai trò `admin`, liệt kê danh sách tất cả các tài khoản nhân viên kèm số lượng phiên đã xử lý, điểm đánh giá trung bình `agent_score`, và sắc thái chủ đạo.
+    *   Bộ lọc & Xem chi tiết: Cho phép Admin chọn xem chi tiết tiến độ một nhân viên bất kỳ để hiển thị biểu đồ tròn sắc thái, phân phối điểm và xu hướng tuần của riêng nhân viên đó.
+
+### Giai đoạn 6 — Phân Tách Cô Lập Hạ Tầng (Tenant-Isolated Infra) & Tối Ưu Hóa Hiệu Năng (Hoàn thành)
+*   **MinIO (Phân tách Prefix cô lập)**: 
+    *   Cấu hình cơ chế lưu trữ file âm thanh ghi âm gốc phân tách theo prefix chứa ID người dùng (`owner_id`) dưới dạng `uploads/{owner_id}/{filename}` thay vì lưu chung một thư mục.
+    *   Đảm bảo tính cô lập dữ liệu tuyệt đối giữa các tài khoản ở tầng lưu trữ đối tượng vật lý (Object Storage).
+*   **Redis (Đặt tiền tố Cache theo User)**:
+    *   Thiết lập cơ chế sinh Key Cache của Redis có đính kèm Namespace theo mã tài khoản (`cache:user:{owner_id}:analysis:{job_id}`).
+    *   Tránh xung đột cache khi nhiều nhân viên thực hiện thao tác đồng thời và tăng tốc truy vấn Dashboard lịch sử riêng biệt.
+*   **RabbitMQ (Mở rộng Multi-Queue & Cấu hình Động)**:
+    *   Nâng cấp cơ chế phân phối job từ 1 queue duy nhất lên thành mô hình **Đa hàng đợi (Multi-Queue)**, bắt đầu chạy thử nghiệm với 2 queue để đánh giá hiệu năng chịu tải và giới hạn xử lý song song của các Worker.
+    *   Đưa số lượng Queue cần khởi tạo vào biến môi trường `.env` (`RABBITMQ_QUEUE_COUNT=2`) để dễ dàng tuỳ chỉnh, tăng giảm quy mô (scaling) khi đưa lên Production mà không cần thay đổi source code.
+
+### Giai đoạn 7 — Viết Unit/Integration Tests & Ổn Định Hệ Thống (Kế hoạch tiếp theo)
 *   **Unit Tests**: Viết kiểm thử thành phần cho các Repositories, Use Cases, và AI Clients của cả `backend`, `voice-worker`, và `llm-worker`.
 *   **Integration Tests**: Giả lập các luồng gửi tin nhắn RabbitMQ bị ngắt quãng, mất kết nối cơ sở dữ liệu PostgreSQL/Redis để củng cố độ bền bỉ (resilience) của Worker.
 *   **Load Testing**: Đo lường thời gian xử lý khi gửi liên tục nhiều yêu cầu chuyển giọng nói cùng lúc lên `voice-worker` để đánh giá khả năng chịu tải trên CPU máy chủ.

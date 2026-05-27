@@ -24,10 +24,11 @@ class AnalyzeJob:
 
     def execute(self, message: dict) -> None:
         job_id = message["job_id"]
+        owner_id = message.get("owner_id")
         logger.info(f"Starting orchestration execution for Job ID: {job_id} (Input Type: {message['input_type']})")
         
         self.repository.mark_processing(job_id)
-        self.cache.set_status(job_id, {"job_id": job_id, "status": "processing"})
+        self.cache.set_status(job_id, {"job_id": job_id, "status": "processing"}, owner_id=owner_id)
         
         try:
             if message["input_type"] == "audio":
@@ -60,11 +61,11 @@ class AnalyzeJob:
             
             logger.info("Saving completed analysis results to PostgreSQL and caching to Redis...")
             self.repository.save_completed(job_id, result)
-            self.cache.set_status(job_id, {"job_id": job_id, "status": "completed", "result": result})
+            self.cache.set_status(job_id, {"job_id": job_id, "status": "completed", "result": result}, owner_id=owner_id)
             logger.info(f"Job ID: {job_id} successfully completed and saved!")
             
         except Exception as exc:
             logger.error(f"Job execution failed for Job ID: {job_id} - Error: {str(exc)}")
             self.repository.save_failed(job_id, str(exc))
-            self.cache.set_status(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+            self.cache.set_status(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)}, owner_id=owner_id)
             raise

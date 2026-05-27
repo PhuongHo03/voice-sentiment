@@ -36,6 +36,7 @@ services:
   backend:
     build: ./backend
     env_file: ./backend/.env
+    restart: always
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 8000)
     depends_on:
       - postgres
@@ -46,12 +47,14 @@ services:
   frontend:
     build: ./frontend
     env_file: ./frontend/.env
+    restart: always
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 5173)
     depends_on:
       - backend
 
   nginx:
     image: nginx:1.27-alpine
+    restart: always
     ports:
       - "9090:80"
     volumes:
@@ -80,12 +83,14 @@ services:
   voice-worker:
     build: ./voice-worker
     env_file: ./voice-worker/.env
+    restart: always
     ports:
       - "9095:8000"
 
   llm-worker:
     build: ./llm-worker
     env_file: ./llm-worker/.env
+    restart: always
     depends_on:
       - postgres
       - redis

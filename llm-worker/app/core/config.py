@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     rabbitmq_url: str
+    rabbitmq_queue_count: int = 1
     minio_endpoint: str
     minio_access_key: str
     minio_secret_key: str

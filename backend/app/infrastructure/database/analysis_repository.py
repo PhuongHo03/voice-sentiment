@@ -9,15 +9,15 @@ class SqlAlchemyAnalysisRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_audio_job(self, object_key: str, name: str | None = None) -> AnalysisJobModel:
-        job = AnalysisJobModel(input_type="audio", status="pending", audio_object_key=object_key, name=name)
+    def create_audio_job(self, object_key: str, name: str | None = None, owner_id: str | None = None) -> AnalysisJobModel:
+        job = AnalysisJobModel(input_type="audio", status="pending", audio_object_key=object_key, name=name, owner_id=owner_id)
         self.session.add(job)
         self.session.commit()
         self.session.refresh(job)
         return job
 
-    def create_text_job(self, text: str, name: str | None = None) -> AnalysisJobModel:
-        job = AnalysisJobModel(input_type="text", status="pending", submitted_text=text, name=name)
+    def create_text_job(self, text: str, name: str | None = None, owner_id: str | None = None) -> AnalysisJobModel:
+        job = AnalysisJobModel(input_type="text", status="pending", submitted_text=text, name=name, owner_id=owner_id)
         self.session.add(job)
         self.session.commit()
         self.session.refresh(job)
@@ -29,19 +29,23 @@ class SqlAlchemyAnalysisRepository:
     def get_result(self, job_id: str) -> AnalysisResultModel | None:
         return self.session.query(AnalysisResultModel).filter_by(job_id=job_id).one_or_none()
 
-    def list_jobs(self, limit: int = 20, offset: int = 0) -> list[tuple[AnalysisJobModel, AnalysisResultModel | None]]:
+    def list_jobs(self, limit: int = 20, offset: int = 0, owner_id: str | None = None) -> list[tuple[AnalysisJobModel, AnalysisResultModel | None]]:
         # Perform a left outer join to get jobs with their results
         query = (
             self.session.query(AnalysisJobModel, AnalysisResultModel)
             .outerjoin(AnalysisResultModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
-            .order_by(AnalysisJobModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
         )
+        if owner_id:
+            query = query.filter(AnalysisJobModel.owner_id == owner_id)
+            
+        query = query.order_by(AnalysisJobModel.created_at.desc()).offset(offset).limit(limit)
         return query.all()
 
-    def count_jobs(self) -> int:
-        return self.session.query(AnalysisJobModel).count()
+    def count_jobs(self, owner_id: str | None = None) -> int:
+        query = self.session.query(AnalysisJobModel)
+        if owner_id:
+            query = query.filter(AnalysisJobModel.owner_id == owner_id)
+        return query.count()
 
     def update_job_name(self, job_id: str, name: str) -> AnalysisJobModel | None:
         job = self.get_job(job_id)
@@ -59,15 +63,21 @@ class SqlAlchemyAnalysisRepository:
             return True
         return False
 
-    def get_analytics_stats(self) -> dict:
-        # Total jobs with results
-        total_jobs = self.session.query(AnalysisResultModel).count()
+    def get_analytics_stats(self, owner_id: str | None = None) -> dict:
+        # Query total jobs
+        total_query = self.session.query(AnalysisResultModel).join(AnalysisJobModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
+        if owner_id:
+            total_query = total_query.filter(AnalysisJobModel.owner_id == owner_id)
+        total_jobs = total_query.count()
         
         # Sentiment distribution
-        sentiments = self.session.query(
+        sent_query = self.session.query(
             AnalysisResultModel.sentiment,
             func.count(AnalysisResultModel.id)
-        ).group_by(AnalysisResultModel.sentiment).all()
+        ).join(AnalysisJobModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
+        if owner_id:
+            sent_query = sent_query.filter(AnalysisJobModel.owner_id == owner_id)
+        sentiments = sent_query.group_by(AnalysisResultModel.sentiment).all()
         
         sentiment_dist = {"positive": 0, "neutral": 0, "negative": 0}
         for s_type, count in sentiments:
@@ -75,10 +85,16 @@ class SqlAlchemyAnalysisRepository:
                 sentiment_dist[s_type.lower()] = count
 
         # Average confidence
-        avg_conf = self.session.query(func.avg(AnalysisResultModel.confidence)).scalar() or 0.0
+        conf_query = self.session.query(func.avg(AnalysisResultModel.confidence)).join(AnalysisJobModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
+        if owner_id:
+            conf_query = conf_query.filter(AnalysisJobModel.owner_id == owner_id)
+        avg_conf = conf_query.scalar() or 0.0
 
         # Average agent score
-        avg_score = self.session.query(func.avg(AnalysisResultModel.agent_score)).scalar() or 0.0
+        score_query = self.session.query(func.avg(AnalysisResultModel.agent_score)).join(AnalysisJobModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
+        if owner_id:
+            score_query = score_query.filter(AnalysisJobModel.owner_id == owner_id)
+        avg_score = score_query.scalar() or 0.0
 
         # Weekly trends: count jobs created on each of the last 7 days
         today = datetime.utcnow().date()
@@ -87,11 +103,13 @@ class SqlAlchemyAnalysisRepository:
         trends = {day.strftime("%Y-%m-%d"): 0 for day in days}
         
         start_date = datetime.combine(days[0], datetime.min.time())
-        daily_counts = self.session.query(
+        trend_query = self.session.query(
             func.date(AnalysisJobModel.created_at).label("day"),
             func.count(AnalysisJobModel.id)
-        ).filter(AnalysisJobModel.created_at >= start_date)\
-         .group_by(func.date(AnalysisJobModel.created_at)).all()
+        ).filter(AnalysisJobModel.created_at >= start_date)
+        if owner_id:
+            trend_query = trend_query.filter(AnalysisJobModel.owner_id == owner_id)
+        daily_counts = trend_query.group_by(func.date(AnalysisJobModel.created_at)).all()
          
         for day, count in daily_counts:
             if day:

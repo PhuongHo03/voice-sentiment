@@ -16,30 +16,45 @@ from app.interfaces.schemas.analysis_schema import (
     SessionListItem,
     RenameRequest,
 )
+from app.infrastructure.dependencies import get_current_user
+from app.infrastructure.database.models import UserModel
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
 @router.post("/audio", response_model=JobAcceptedResponse)
-async def analyze_audio(file: UploadFile = File(...), session: Session = Depends(get_session)) -> dict:
+async def analyze_audio(
+    file: UploadFile = File(...), 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     if file.content_type not in {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/webm", "audio/mp4", "video/mp4"}:
         raise HTTPException(status_code=400, detail="Only .mp3, .wav, .webm, and .mp4 audio/video uploads are supported")
     content = await file.read()
     use_case = SubmitAudioAnalysis(SqlAlchemyAnalysisRepository(session), MinioAudioStorage(), RabbitMqJobPublisher())
-    return use_case.execute(file.filename or "audio.bin", content, file.content_type or "application/octet-stream")
+    return use_case.execute(file.filename or "audio.bin", content, file.content_type or "application/octet-stream", owner_id=current_user.id)
 
 
 @router.post("/text", response_model=JobAcceptedResponse)
-def analyze_text(payload: TextAnalysisRequest, session: Session = Depends(get_session)) -> dict:
+def analyze_text(
+    payload: TextAnalysisRequest, 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     use_case = SubmitTextAnalysis(SqlAlchemyAnalysisRepository(session), RabbitMqJobPublisher())
-    return use_case.execute(payload.text)
+    return use_case.execute(payload.text, owner_id=current_user.id)
 
 
 @router.get("", response_model=SessionListResponse)
-def list_sessions(limit: int = 20, offset: int = 0, session: Session = Depends(get_session)) -> dict:
+def list_sessions(
+    limit: int = 20, 
+    offset: int = 0, 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     repository = SqlAlchemyAnalysisRepository(session)
-    db_sessions = repository.list_jobs(limit=limit, offset=offset)
-    total = repository.count_jobs()
+    db_sessions = repository.list_jobs(limit=limit, offset=offset, owner_id=current_user.id)
+    total = repository.count_jobs(owner_id=current_user.id)
     
     sessions_list = []
     for job, result in db_sessions:
@@ -62,19 +77,30 @@ def list_sessions(limit: int = 20, offset: int = 0, session: Session = Depends(g
 
 
 @router.get("/stats")
-def get_stats(session: Session = Depends(get_session)) -> dict:
+def get_stats(
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     repository = SqlAlchemyAnalysisRepository(session)
-    return repository.get_analytics_stats()
+    return repository.get_analytics_stats(owner_id=current_user.id)
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
-def get_analysis(job_id: str, session: Session = Depends(get_session)) -> dict:
+def get_analysis(
+    job_id: str, 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     repository = SqlAlchemyAnalysisRepository(session)
     job = repository.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis job not found")
         
-    cached = RedisJobCache().get(job_id)
+    # Check permissions (only filter if job has owner_id and it doesn't match current user)
+    if job.owner_id and job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to access this session")
+        
+    cached = RedisJobCache().get(job_id, owner_id=current_user.id)
     if cached:
         cached["name"] = job.name
         return cached
@@ -95,11 +121,22 @@ def get_analysis(job_id: str, session: Session = Depends(get_session)) -> dict:
 
 
 @router.patch("/{job_id}", response_model=JobStatusResponse)
-def rename_session(job_id: str, payload: RenameRequest, session: Session = Depends(get_session)) -> dict:
+def rename_session(
+    job_id: str, 
+    payload: RenameRequest, 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     repository = SqlAlchemyAnalysisRepository(session)
-    job = repository.update_job_name(job_id, payload.name)
+    job = repository.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis job not found")
+        
+    # Check permissions
+    if job.owner_id and job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to access this session")
+        
+    job = repository.update_job_name(job_id, payload.name)
     
     result = repository.get_result(job_id)
     result_payload = None
@@ -117,11 +154,19 @@ def rename_session(job_id: str, payload: RenameRequest, session: Session = Depen
 
 
 @router.delete("/{job_id}")
-def delete_session(job_id: str, session: Session = Depends(get_session)) -> dict:
+def delete_session(
+    job_id: str, 
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
     repository = SqlAlchemyAnalysisRepository(session)
     job = repository.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis job not found")
+        
+    # Check permissions
+    if job.owner_id and job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to access this session")
         
     audio_key = job.audio_object_key
     
@@ -135,9 +180,8 @@ def delete_session(job_id: str, session: Session = Depends(get_session)) -> dict
         except Exception:
             pass
     
-    # Also delete from Redis cache if exists
     try:
-        RedisJobCache().client.delete(f"analysis:{job_id}")
+        RedisJobCache().delete(job_id, owner_id=current_user.id)
     except Exception:
         pass
         

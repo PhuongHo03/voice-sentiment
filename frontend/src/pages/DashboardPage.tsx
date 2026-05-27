@@ -10,10 +10,13 @@ import {
   renameSession,
   submitAudio,
   submitText,
+  fetchStats,
 } from '../services/analysisApi';
 import type { JobStatus, SessionListItem } from '../types/analysis';
+import { useAuth } from '../context/AuthContext';
 
-export function DashboardPage() {
+export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: boolean; onGoToAdmin?: () => void }) {
+  const { logout, user } = useAuth();
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionDetail, setActiveSessionDetail] = useState<JobStatus | null>(null);
@@ -161,9 +164,7 @@ export function DashboardPage() {
   async function loadStats() {
     setStatsLoading(true);
     try {
-      const res = await fetch('/api/analysis/stats');
-      if (!res.ok) throw new Error('Không thể tải thống kê từ backend');
-      const data = await res.json();
+      const data = await fetchStats();
       setStats(data);
     } catch (err) {
       console.error('Lỗi tải stats:', err);
@@ -397,6 +398,17 @@ export function DashboardPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                   <span>Dashboard Thống kê</span>
                 </div>
+                {isAdmin && onGoToAdmin && (
+                  <div 
+                    className="sidebar-action-item admin"
+                    onClick={onGoToAdmin}
+                    title="Hệ thống Quản trị Admin"
+                    style={{ border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)', marginTop: '4px' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-primary)' }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>Admin Portal</span>
+                  </div>
+                )}
               </div>
 
               <button className="new-session-button-wide" onClick={handleCreateNewSession} style={{ marginTop: '8px' }}>
@@ -503,9 +515,9 @@ export function DashboardPage() {
                           <div className="session-card-meta">
                             <span>{formatRelativeTime(s.created_at)}</span>
                             {s.status === 'completed' && s.sentiment && (
-                              <span className={`session-card-sentiment-badge ${s.sentiment}`}>
-                                {s.sentiment === 'positive' ? 'Tích cực' : 
-                                 s.sentiment === 'negative' ? 'Tiêu cực' : 'Trung lập'}
+                              <span className={`session-card-sentiment-badge ${s.sentiment.toLowerCase()}`}>
+                                {s.sentiment.toLowerCase() === 'positive' ? 'Tích cực' : 
+                                 s.sentiment.toLowerCase() === 'negative' ? 'Tiêu cực' : 'Trung lập'}
                               </span>
                             )}
                             {(s.status === 'pending' || s.status === 'processing') && (
@@ -520,6 +532,52 @@ export function DashboardPage() {
                   );
                 })
               )}
+            </div>
+            {/* User Profile & Logout section in Sidebar */}
+            <div className="sidebar-profile-footer" style={{ 
+              padding: '16px', 
+              borderTop: '1px solid var(--glass-border)', 
+              marginTop: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              background: 'rgba(0, 0, 0, 0.2)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                <span className="emp-avatar" style={{ width: '28px', height: '28px', fontSize: '12px', flexShrink: 0 }}>
+                  {user?.username?.substring(0, 2).toUpperCase()}
+                </span>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {user?.username}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    {user?.role_id === 'admin' ? 'Quản trị' : 'Nhân viên'}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={logout} 
+                className="logout-icon-btn" 
+                title="Đăng xuất"
+                style={{ 
+                  width: '32px', 
+                  height: '32px', 
+                  padding: 0, 
+                  marginTop: 0, 
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  color: 'var(--color-rose)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(244, 63, 94, 0.2)',
+                  cursor: 'pointer'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              </button>
             </div>
           </>
         ) : (
@@ -553,6 +611,16 @@ export function DashboardPage() {
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
               </div>
+              {isAdmin && onGoToAdmin && (
+                <div 
+                  className="sidebar-action-item admin"
+                  onClick={onGoToAdmin}
+                  title="Admin Portal"
+                  style={{ border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)', marginTop: '4px' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-primary)' }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+              )}
             </div>
 
             <button
@@ -570,6 +638,30 @@ export function DashboardPage() {
               </svg>
             </button>
 
+            {/* Collapsed logout button */}
+            <div style={{ marginTop: 'auto', padding: '8px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button 
+                onClick={logout} 
+                title="Đăng xuất"
+                style={{ 
+                  width: '32px', 
+                  height: '32px', 
+                  padding: 0, 
+                  marginTop: 0, 
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  color: 'var(--color-rose)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(244, 63, 94, 0.2)',
+                  cursor: 'pointer'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              </button>
+            </div>
+
             {/* List of session circles with custom thin scrollbar */}
             <div className="collapsed-sessions-container">
               {sessions.map(s => {
@@ -586,7 +678,7 @@ export function DashboardPage() {
                   >
                     <span style={{ fontSize: '1rem' }}>{s.input_type === 'text' ? '📝' : '🎵'}</span>
                     {s.status === 'completed' && s.sentiment && (
-                      <span className={`sentiment-dot-indicator ${s.sentiment}`} />
+                      <span className={`sentiment-dot-indicator ${s.sentiment.toLowerCase()}`} />
                     )}
                     {(s.status === 'pending' || s.status === 'processing') && (
                       <span className={`sentiment-dot-indicator ${s.status}`} />
@@ -967,13 +1059,13 @@ export function DashboardPage() {
                                     r="42" 
                                     stroke={
                                       activeSessionDetail.result.agent_score >= 80 ? '#10b981' :
-                                      activeSessionDetail.result.agent_score >= 50 ? '#eab308' : '#ef4444'
+                                      activeSessionDetail.result.agent_score >= 50 ? '#3b82f6' : '#ef4444'
                                     }
                                     strokeDasharray="263.9" 
                                     strokeDashoffset={263.9 - (activeSessionDetail.result.agent_score / 100) * 263.9} 
                                     style={{ filter: `drop-shadow(0 0 6px ${
                                       activeSessionDetail.result.agent_score >= 80 ? 'rgba(16,185,129,0.5)' :
-                                      activeSessionDetail.result.agent_score >= 50 ? 'rgba(234,179,8,0.5)' : 'rgba(239,68,68,0.5)'
+                                      activeSessionDetail.result.agent_score >= 50 ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)'
                                     })` }}
                                   />
                                 </svg>
@@ -984,7 +1076,7 @@ export function DashboardPage() {
                               </div>
                               <div className="agent-status-label" style={{
                                 color: activeSessionDetail.result.agent_score >= 80 ? '#10b981' :
-                                       activeSessionDetail.result.agent_score >= 50 ? '#eab308' : '#ef4444'
+                                       activeSessionDetail.result.agent_score >= 50 ? '#3b82f6' : '#ef4444'
                               }}>
                                 {activeSessionDetail.result.agent_score >= 80 ? 'Xuất sắc' :
                                  activeSessionDetail.result.agent_score >= 50 ? 'Đạt yêu cầu' : 'Cần cải thiện'}
