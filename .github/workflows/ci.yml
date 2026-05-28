@@ -16,6 +16,13 @@ jobs:
   backend-tests:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://voice:voice@localhost/voice_sentiment"
+      REDIS_URL: "redis://localhost:6379"
+      RABBITMQ_URL: "amqp://guest:guest@localhost:5672"
+      MINIO_ENDPOINT: "localhost:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -66,6 +73,17 @@ jobs:
   llm-worker-tests:
     name: LLM Worker Unit Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://voice:voice@localhost/voice_sentiment"
+      REDIS_URL: "redis://localhost:6379"
+      RABBITMQ_URL: "amqp://guest:guest@localhost:5672"
+      MINIO_ENDPOINT: "localhost:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      VOICE_SERVER_URI: "http://localhost:9095"
+      LLM_BASE_URL: "http://localhost:8007/v1"
+      LLM_API_KEY: "sk-dummykey"
+      LLM_MODEL: "dummy-model"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -95,10 +113,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: 'frontend/package-lock.json'
 
