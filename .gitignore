@@ -20,6 +20,7 @@ Thumbs.db
 # Python (Backend, llm-worker, voice-worker)
 # ============================================================
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
@@ -102,3 +103,13 @@ frontend/.env
 
 # Legacy (old worker/ directory — now replaced by llm-worker/ & voice-worker/)
 worker/.env
+
+# ============================================================
+# Runtime & Downloaded AI Models
+# ============================================================
+.runtime/
+voice-worker/models/
+llm-worker/models/
+*.onnx
+*.pt
+

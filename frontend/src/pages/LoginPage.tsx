@@ -1,24 +1,21 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import React from 'react';
+import { useLogin } from '../hooks/useLogin';
 
 interface LoginPageProps {
   onSwitchToRegister: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister }) => {
-  const { login, error, clearError } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) return;
-    setIsSubmitting(true);
-    clearError();
-    const success = await login(email, password);
-    setIsSubmitting(false);
-  };
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    isSubmitting,
+    error,
+    clearError,
+    handleSubmit,
+  } = useLogin();
 
   return (
     <div className="auth-container">
@@ -81,4 +78,5 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister }) => {
     </div>
   );
 };
+
 export default LoginPage;

@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: voice_sentiment
-      POSTGRES_USER: voice
-      POSTGRES_PASSWORD: voice
+      POSTGRES_DB: ${POSTGRES_DB:-voice_sentiment}
+      POSTGRES_USER: ${POSTGRES_USER:-voice}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voice}
     ports:
       - "5432:5432"
     volumes:
@@ -14,8 +14,8 @@ services:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9000:9000"
       - "9092:9001"
@@ -35,7 +35,7 @@ services:
 
   backend:
     build: ./backend
-    env_file: ./backend/.env
+    env_file: .env
     restart: always
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 8000)
     depends_on:
@@ -46,7 +46,7 @@ services:
 
   frontend:
     build: ./frontend
-    env_file: ./frontend/.env
+    env_file: .env
     restart: always
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 5173)
     depends_on:
@@ -82,14 +82,14 @@ services:
 
   voice-worker:
     build: ./voice-worker
-    env_file: ./voice-worker/.env
+    env_file: .env
     restart: always
     ports:
       - "9095:8000"
 
   llm-worker:
     build: ./llm-worker
-    env_file: ./llm-worker/.env
+    env_file: .env
     restart: always
     depends_on:
       - postgres

@@ -29,6 +29,37 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper to format/translate Pydantic/FastAPI validation or system errors
+function parseDetailError(detail: any, defaultMsg: string): string {
+  if (!detail) return defaultMsg;
+  
+  if (typeof detail === 'string') {
+    if (detail === 'Incorrect email or password') return 'Mật khẩu hoặc email không chính xác!';
+    if (detail === 'User is not active') return 'Tài khoản chưa được kích hoạt bởi Ban quản trị!';
+    if (detail === 'Email already registered') return 'Địa chỉ email đã tồn tại trong hệ thống!';
+    if (detail === 'Username already registered') return 'Tên tài khoản đã tồn tại trong hệ thống!';
+    return detail;
+  }
+  
+  if (Array.isArray(detail)) {
+    const err = detail[0];
+    if (err && typeof err === 'object') {
+      const msg = err.msg || '';
+      if (msg.includes('value is not a valid email address')) {
+        return 'Địa chỉ email không đúng định dạng!';
+      }
+      return err.msg || JSON.stringify(err);
+    }
+    return detail.map(d => typeof d === 'object' ? JSON.stringify(d) : String(d)).join(', ');
+  }
+  
+  if (typeof detail === 'object') {
+    return detail.message || JSON.stringify(detail);
+  }
+  
+  return String(detail);
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -79,7 +110,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Incorrect email or password');
+        const errorDetail = parseDetailError(errorData.detail, 'Incorrect email or password');
+        throw new Error(errorDetail);
       }
 
       const data = await response.json();
@@ -121,7 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Registration failed');
+        const errorDetail = parseDetailError(errorData.detail, 'Registration failed');
+        throw new Error(errorDetail);
       }
 
       return true;
@@ -133,7 +166,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('voice_sentiment_token');
-    // Clear other state items if needed
     localStorage.removeItem('activeView');
     localStorage.removeItem('activeSessionId');
     setUser(null);

@@ -62,6 +62,11 @@ class AnalyzeJob:
             logger.info("Saving completed analysis results to PostgreSQL and caching to Redis...")
             self.repository.save_completed(job_id, result)
             self.cache.set_status(job_id, {"job_id": job_id, "status": "completed", "result": result}, owner_id=owner_id)
+            if owner_id:
+                try:
+                    self.cache.delete_stats(owner_id)
+                except Exception as cache_err:
+                    logger.warning(f"Failed to invalidate stats cache for user {owner_id}: {cache_err}")
             logger.info(f"Job ID: {job_id} successfully completed and saved!")
             
         except Exception as exc:

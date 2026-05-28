@@ -2,9 +2,15 @@
 
 ## Mục đích
 
-Thư mục `backend/` chứa dịch vụ FastAPI giao tiếp trực tiếp với giao diện người dùng thông qua cổng ngược Nginx (UI-facing API). Dịch vụ này đảm nhận các nhiệm vụ: quản lý các API công khai, xác thực yêu cầu (validation), lưu trữ thông tin trạng thái (metadata), tải tệp tin lên bộ lưu trữ đối tượng MinIO, xuất bản (publish) công việc vào hàng đợi RabbitMQ, truy vấn trạng thái/kết quả từ Redis hoặc PostgreSQL, và trả về dữ liệu thống kê tổng hợp cho Dashboard.
+Thư mục `backend/` chứa dịch vụ FastAPI giao tiếp trực tiếp với giao diện người dùng thông qua cổng ngược Nginx (UI-facing API Gateway). Dịch vụ này đảm nhận các nhiệm vụ:
+- Xác thực và phân quyền người dùng thông qua chuẩn bảo mật mã hóa JWT (JSON Web Tokens).
+- Phân biệt vai trò người dùng (Role-Based Access Control - RBAC) như `admin` (Quản trị viên) và `employee` (Nhân viên).
+- Cung cấp các API công khai phục vụ việc tải file ghi âm lên bộ lưu trữ đối tượng MinIO cô lập theo thư mục từng người dùng (`owner_id`).
+- Xuất bản (publish) không đồng bộ các công việc phân tích âm thanh/văn bản vào hàng đợi RabbitMQ.
+- Đọc nhanh trạng thái công việc đang xử lý từ Redis cache và lưu trữ kết quả cuối cùng bền vững vào PostgreSQL.
+- Tổng hợp thống kê hiệu suất cá nhân và tổng quan toàn hệ thống phục vụ hiển thị Dashboard.
 
-Backend hoàn toàn **không** chạy trực tiếp bất kỳ mô hình ASR hay LLM nào, nhằm giữ cho API luôn cực kỳ nhẹ nhàng và phản hồi thời gian thực. Tất cả các tác vụ xử lý nặng được chuyển giao không đồng bộ cho bộ đôi microservices `voice-worker` và `llm-worker`.
+Dịch vụ backend hoàn toàn **stateless** và không chạy trực tiếp bất kỳ mô hình AI nặng nề nào. Mọi tác vụ tính toán ASR (Speech-to-Text) và LLM phân tích cảm xúc đều được đẩy về cho các worker độc lập (`voice-worker` và `llm-worker`).
 
 ---
 
@@ -12,101 +18,165 @@ Backend hoàn toàn **không** chạy trực tiếp bất kỳ mô hình ASR hay
 
 ```text
 backend/
-├── app/main.py                         ← Điểm khởi chạy FastAPI và áp dụng tự động migrations DB
-├── app/core/config.py                  ← Cấu hình môi trường cho Backend (kết nối DB, Cache, Queue, MinIO)
-├── app/domain/analysis.py              ← Định nghĩa các kiểu dữ liệu Domain của Job/Result
-├── app/application/use_cases/          ← Use cases gửi công việc phân tích âm thanh/văn bản
-├── app/infrastructure/database/        ← Khởi tạo SQLAlchemy models/session/repository
-│   ├── models.py                       ← ORM models: AnalysisJobModel, AnalysisResultModel
-│   ├── analysis_repository.py          ← Repository: CRUD + get_analytics_stats()
-│   └── session.py                      ← SQLAlchemy session factory
-├── app/infrastructure/storage/         ← Bộ điều hợp tải tệp tin âm thanh lên MinIO bucket
-├── app/infrastructure/cache/           ← Bộ điều hợp đọc nhanh trạng thái công việc từ Redis
-├── app/infrastructure/queue/           ← Bộ điều hợp xuất bản công việc vào hàng đợi RabbitMQ
-├── app/interfaces/controllers/         ← Các bộ điều khiển HTTP (Health và Analysis controllers)
-│   └── analysis_controller.py          ← Toàn bộ các route phân tích + stats
-├── app/interfaces/schemas/             ← Pydantic schemas cho request/response validation
-│   └── analysis_schema.py              ← JobAcceptedResponse, JobStatusResponse, SessionListResponse...
-└── alembic/versions/                   ← Các file migration Alembic tự động
-    ├── 0001_initial.py
-    ├── 0002_add_session_name.py
-    └── 0003_add_agent_evaluation.py    ← Bổ sung agent_score & agent_advice_json
+├── app/main.py                         ← Khởi chạy FastAPI và tự động đồng bộ DB schema qua Alembic
+├── app/core/config.py                  ← Cấu hình môi trường qua Pydantic Settings (DB, Cache, Queue, MinIO)
+├── app/application/use_cases/          ← Use cases lõi: gửi phân tích, đăng ký/đăng nhập tài khoản
+├── app/infrastructure/database/        ← SQLAlchemy models, session, và repositories
+│   ├── models.py                       ← ORM models: Role, User, AnalysisJobModel, AnalysisResultModel
+│   ├── analysis_repository.py          ← CRUD cho Job/Result & truy vấn thống kê Dashboard/Admin
+│   └── session.py                      ← Factory kết nối cơ sở dữ liệu
+├── app/infrastructure/storage/         ← Tải file âm thanh lên MinIO cô lập theo: uploads/{owner_id}/{filename}
+├── app/infrastructure/cache/           ← Redis adapter với khóa định danh phân tách namespace theo người dùng
+├── app/infrastructure/queue/           ← Đẩy tin nhắn không đồng bộ vào đa hàng đợi RabbitMQ
+├── app/interfaces/controllers/         ← Bộ điều khiển HTTP routing (Auth, Analysis, và Admin controllers)
+│   ├── auth_controller.py              ← API đăng ký, đăng nhập tài khoản
+│   ├── analysis_controller.py          ← Các API phiên phân tích và thống kê cá nhân
+│   └── admin_controller.py             ← Các API quản trị admin (kích hoạt user, đổi vai trò, xem tiến độ nhân viên)
+├── app/interfaces/schemas/             ← Pydantic schemas xác thực request/response payload
+└── alembic/versions/                   ← Tập lệnh migration tự động khởi tạo cơ sở dữ liệu
+    └── 0001_initial_schema.py          ← Tập lệnh hợp nhất khởi tạo đầy đủ Schema & Dữ liệu Seed ban đầu
 ```
 
 ---
 
 ## Cấu Trúc Cơ Sở Dữ Liệu (Database Schema)
 
-### Bảng `analysis_jobs`
+Hệ thống cơ sở dữ liệu được tổ chức chặt chẽ để đảm bảo tính toàn vẹn dữ liệu và phân tách tài khoản người dùng:
 
+### 1. Bảng `roles` (Vai trò)
 | Cột | Kiểu | Mô tả |
 |---|---|---|
-| `id` | UUID | Khoá chính định danh duy nhất mỗi Job |
-| `name` | VARCHAR(256) | Tên hiển thị tùy chỉnh (có thể đổi tên bằng `PATCH`) |
+| `id` | VARCHAR(32) PK | Định danh vai trò (`admin`, `employee`) |
+| `name` | VARCHAR(64) | Tên vai trò |
+| `description` | VARCHAR(256) | Mô tả chi tiết quyền hạn vai trò |
+
+### 2. Bảng `users` (Tài khoản)
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID định danh tài khoản người dùng |
+| `username` | VARCHAR(128) | Tên tài khoản đăng nhập (Unique) |
+| `email` | VARCHAR(128) | Địa chỉ Email liên hệ (Unique) |
+| `hashed_password`| VARCHAR(256) | Mật khẩu mã hóa bảo mật Bcrypt |
+| `is_active` | BOOLEAN | Trạng thái tài khoản (Chờ duyệt `false`, Kích hoạt `true`) |
+| `created_at` | TIMESTAMPTZ | Ngày giờ đăng ký tài khoản |
+
+### 3. Bảng `user_role` (Liên kết vai trò)
+Bảng trung gian liên kết 1-nhiều hoặc nhiều-nhiều giữa bảng `users` và `roles` (để hỗ trợ gán nhiều vai trò trong tương lai).
+* `user_id`: Khóa ngoại liên kết bảng `users` (`ondelete='CASCADE'`).
+* `role_id`: Khóa ngoại liên kết bảng `roles` (`ondelete='CASCADE'`).
+
+### 4. Bảng `analysis_jobs` (Phiên làm việc)
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID định danh phiên phân tích |
+| `name` | VARCHAR(256) | Tiêu đề tùy chỉnh của phiên (có thể đổi tên) |
 | `input_type` | VARCHAR(16) | Loại đầu vào: `audio` hoặc `text` |
 | `status` | VARCHAR(16) | Trạng thái: `pending` → `processing` → `completed` / `failed` |
-| `audio_object_key` | VARCHAR(512) | Đường dẫn file âm thanh trong MinIO bucket `uploads` |
-| `submitted_text` | TEXT | Nội dung văn bản gốc khi `input_type = text` (dành cho audit trail) |
-| `error_message` | TEXT | Mô tả lỗi nếu Job thất bại |
-| `created_at` | TIMESTAMPTZ | Thời điểm tạo Job |
+| `audio_object_key`| VARCHAR(512) | Đường dẫn vật lý file ghi âm trong MinIO: `uploads/{owner_id}/{filename}` |
+| `submitted_text` | TEXT | Văn bản thô đầu vào |
+| `error_message` | TEXT | Nội dung chi tiết lỗi nếu Job thất bại |
+| `owner_id` | VARCHAR(36) FK | Khóa ngoại liên kết với `users.id` để phân tách dữ liệu cá nhân |
+| `created_at` | TIMESTAMPTZ | Thời điểm khởi tạo phiên |
 | `updated_at` | TIMESTAMPTZ | Thời điểm cập nhật trạng thái gần nhất |
 
-### Bảng `analysis_results`
-
+### 5. Bảng `analysis_results` (Kết quả phân tích)
 | Cột | Kiểu | Mô tả |
 |---|---|---|
-| `id` | UUID | Khoá chính |
-| `job_id` | UUID FK | Liên kết 1-1 tới `analysis_jobs.id` |
-| `transcript_json` | JSONB | Danh sách lượt hội thoại `[{speaker, text, start_seconds, end_seconds}]` |
-| `summary_json` | JSONB | Danh sách bullet points tóm tắt cuộc gọi |
-| `sentiment` | VARCHAR(32) | Sắc thái cảm xúc tổng thể: `positive` / `neutral` / `negative` |
-| `sentiment_reason` | TEXT | Lý do đánh giá sắc thái từ LLM |
-| `confidence` | FLOAT | Điểm tự tin 0.0–1.0 của LLM |
-| `agent_score` | INT (nullable) | Điểm đánh giá nhân viên 0–10 từ LLM |
-| `agent_advice_json` | JSONB (nullable) | Danh sách lời khuyên hành động từ LLM cho nhân viên |
-| `created_at` | TIMESTAMPTZ | Thời điểm tạo kết quả |
+| `id` | VARCHAR(36) PK | UUID định danh kết quả |
+| `job_id` | VARCHAR(36) FK | Khóa ngoại liên kết 1-1 tới `analysis_jobs.id` |
+| `transcript_json`| JSONB | Nội dung cuộc gọi đã phân đoạn: `[{speaker, text, start_seconds, end_seconds}]` |
+| `summary_json` | JSONB | Tóm tắt các ý chính dạng danh sách |
+| `sentiment` | VARCHAR(32) | Sắc thái tổng thể cuộc gọi: `positive` / `neutral` / `negative` |
+| `sentiment_reason`| TEXT | Lý do phân tích sắc thái cảm xúc từ LLM |
+| `confidence` | FLOAT | Chỉ số độ tự tin 0.0 - 1.0 của LLM |
+| `agent_score` | INT | Điểm kỹ năng chăm sóc khách hàng của nhân viên (0-100đ) |
+| `agent_advice_json`| JSONB | Lời khuyên hành động thông minh từ AI cho nhân viên |
+| `created_at` | TIMESTAMPTZ | Ngày giờ lưu kết quả |
 
 ---
 
-## Luồng chạy hệ thống (Runtime Flow)
+## Luồng xử lý nghiệp vụ (Runtime Flow)
 
-1.  **Phân tích âm thanh**: Khi giao diện gọi `POST /api/analysis/audio`, Backend sẽ lưu tệp tin âm thanh nhận được vào bộ lưu trữ đối tượng MinIO bucket `uploads`, tạo một bản ghi trạng thái trong bảng `analysis_jobs` của PostgreSQL với trạng thái ban đầu là `pending`, xuất bản một tin nhắn chứa ID công việc vào hàng đợi `analysis.jobs` của RabbitMQ, sau đó trả về ngay lập tức mã `job_id` cùng trạng thái `pending`.
-2.  **Phân tích văn bản**: Khi giao diện gọi `POST /api/analysis/text`, Backend tạo trực tiếp bản ghi công việc dạng văn bản trong PostgreSQL (lưu `submitted_text` gốc cho audit) và đẩy tin nhắn phân tích kèm nội dung văn bản vào hàng đợi `analysis.jobs` của RabbitMQ.
-3.  **Tra cứu kết quả**: Khi giao diện gọi `GET /api/analysis/{job_id}`, Backend sẽ truy vấn bộ nhớ đệm **Redis** trước để phản hồi siêu tốc dưới 1ms. Nếu không tìm thấy trong Redis, nó sẽ thực hiện truy vấn cơ sở dữ liệu **PostgreSQL**. Khi công việc hoàn thành (`completed`), kết quả trả về sẽ bao gồm: đoạn hội thoại (transcript), danh sách tóm tắt (summary), sắc thái cảm xúc (sentiment), lý do đánh giá, điểm tự tin (confidence), **điểm nhân viên (agent_score)**, và **lời khuyên nhân viên (agent_advice)**.
-4.  **Danh sách phiên**: `GET /api/analysis` trả về danh sách các phiên phân tích có phân trang (`limit`, `offset`), kèm tổng số và sentiment tóm tắt mỗi phiên.
-5.  **Thống kê Dashboard**: `GET /api/analysis/stats` tổng hợp: tổng số phân tích, phân phối sentiment (tích cực/trung lập/tiêu cực), điểm nhân viên trung bình, và xu hướng 7 ngày gần nhất.
-
----
-
-## Các Cổng Dịch Vụ Công Khai (Endpoints)
-
-Dịch vụ backend chạy trên cổng nội bộ `8000` của container và được định tuyến thông qua cổng Nginx ngược (`9090` trên host) tại các địa chỉ:
-
-| Phương thức | Đường dẫn | Mục đích |
-|---|---|---|
-| GET | `/health` | Kiểm tra tình trạng hoạt động (health check) của Backend |
-| POST | `/api/analysis/audio` | Tải lên file âm thanh (`.mp3`, `.wav`, `.webm`, `.mp4`) |
-| POST | `/api/analysis/text` | Gửi trực tiếp văn bản hội thoại để phân tích nhanh |
-| GET | `/api/analysis` | Danh sách phiên phân tích (hỗ trợ `limit`, `offset`) |
-| GET | `/api/analysis/stats` | **[MỚI]** Số liệu thống kê tổng hợp cho Dashboard |
-| GET | `/api/analysis/{job_id}` | Lấy trạng thái và kết quả chi tiết của một phiên |
-| PATCH | `/api/analysis/{job_id}` | **[MỚI]** Đổi tên phiên phân tích |
-| DELETE | `/api/analysis/{job_id}` | **[MỚI]** Xoá phiên + file MinIO + cache Redis |
+1. **Xác thực yêu cầu**: Mọi yêu cầu tới API nghiệp vụ (trừ Đăng nhập/Đăng ký) đều phải gửi kèm JWT token qua Header `Authorization: Bearer <token>`. Dependency `get_current_user` của FastAPI sẽ xác minh tính hợp lệ và truy xuất thông tin tài khoản đang thao tác.
+2. **Gửi yêu cầu phân tích**:
+   - **Âm thanh**: File âm thanh tải lên được đẩy vào MinIO với đường dẫn cô lập chứa ID người dùng (`uploads/{owner_id}/{filename}`). Backend ghi nhận một Job mới trạng thái `pending` trong Postgres (gán `owner_id = current_user.id`), đẩy tin nhắn công việc vào hàng đợi RabbitMQ (`analysis.jobs`), và trả về `job_id` lập tức.
+   - **Văn bản**: Backend ghi nhận Job mới trong Postgres, đẩy tin nhắn thô chứa văn bản trực tiếp vào hàng đợi RabbitMQ mà không qua bước lưu trữ âm thanh hay gọi `voice-worker`.
+3. **Phòng vệ cách ly dữ liệu**:
+   - Khi nhân viên gọi danh sách phiên `GET /api/analysis` hoặc xem stats thống kê `GET /api/analysis/stats`, repository sẽ áp dụng bộ lọc nghiêm ngặt `owner_id = current_user.id`. Đảm bảo nhân viên này không thể xem trộm dữ liệu phân tích của nhân viên khác.
+4. **Quyền hạn quản trị (Admin RBAC)**:
+   - Các API quản trị dưới prefix `/api/admin/` yêu cầu tài khoản phải có vai trò `admin`. Admin có thể lấy danh sách toàn bộ nhân viên kèm hiệu năng tổng quát, kích hoạt/vô hiệu hóa tài khoản, đổi vai trò hoặc xem chi tiết biểu đồ Dashboard/Lịch sử làm việc của bất kỳ nhân viên nào.
 
 ---
 
-## Quản lý Di cư Cơ sở Dữ liệu (Database Migrations - Alembic)
+## ⚡ Cơ Chế Caching Nâng Cao & Tối Ưu Hóa Hiệu Năng
 
-Dịch vụ backend quản lý trực tiếp cấu trúc bảng cơ sở dữ liệu PostgreSQL bằng công cụ **Alembic**. Khi container backend được khởi chạy, một tập lệnh tự động di cư (`command.upgrade(cfg, "head")`) sẽ chạy trước khi khởi tạo uvicorn server nhằm đảm bảo các bảng dữ liệu cần thiết được tạo lập và đồng bộ tự động lên phiên bản mới nhất (`head`).
+Dịch vụ Backend tích hợp chặt chẽ bộ nhớ đệm **Redis** để giảm tải tối đa cho cơ sở dữ liệu PostgreSQL và mang lại phản hồi UI cực nhanh (dưới 1ms):
 
-Các script di cư được đặt tại `backend/alembic/versions/`:
-- `0001_initial.py` — Tạo bảng `analysis_jobs` và `analysis_results` cơ bản.
-- `0002_add_session_name.py` — Thêm cột `name` cho bảng `analysis_jobs`.
-- `0003_add_agent_evaluation.py` — Thêm cột `agent_score` và `agent_advice_json` cho bảng `analysis_results`.
+### 1. Cơ chế Caching Trạng thái Job Tức thời (Pending Job Caching)
+* **Vấn đề**: Khi người dùng gửi file ghi âm hoặc văn bản phân tích, hệ thống đẩy Job vào RabbitMQ xử lý nền. Trong thời gian chờ Worker bắt đầu chạy, Frontend thực hiện **Polling (truy vấn lặp mỗi 2 giây)** để lấy trạng thái. Nếu không có cache, mỗi lượt Polling sẽ kích hoạt một truy vấn SQL đắt đỏ vào ổ đĩa.
+* **Giải pháp**: Ngay khi tạo Job, API `submit_audio_analysis` hoặc `submit_text_analysis` lập tức ghi đè trạng thái `pending` của Job đó vào Redis cache (`cache:user:{owner_id}:analysis:{job_id}`) với TTL 1 giờ. Lượt Polling đầu tiên từ Frontend sẽ trúng cache 100%, đưa tải SQL Polling ban đầu về tuyệt đối **0%**.
+
+### 2. Mô hình Cache-Aside cho Thống kê Dashboard (Dashboard Stats Caching)
+* **Vấn đề**: Endpoint `/api/analysis/stats` tính toán các dữ liệu tổng hợp rất nặng (gom nhóm sentiment, tính điểm trung bình nhân viên, biểu đồ xu hướng 7 ngày). Truy vấn trực tiếp vào PostgreSQL khi lượng bản ghi lớn sẽ làm nghẽn cổ chai hệ thống.
+* **Giải pháp**: Áp dụng mô hình **Cache-Aside**:
+  1. Khi nhận request `GET /api/analysis/stats`, Backend kiểm tra cache Redis khóa `cache:user:{owner_id}:stats`.
+  2. **Cache Hit**: Trả về dữ liệu JSON lưu trong cache lập tức (Latency < 1ms).
+  3. **Cache Miss**: Thực hiện truy vấn aggregate gom nhóm trên PostgreSQL, ghi đền kết quả vào Redis với thời gian sống **24 giờ (TTL 86400 giây)**, và trả về cho client.
+
+### 3. Thu hồi và Xóa bỏ Cache Chủ động (Active Cache Invalidation)
+Để tránh dữ liệu cũ (stale data) hiển thị sai lệch trên Dashboard, Backend chủ động thực hiện thu hồi cache:
+* **Khi xóa phiên (`DELETE /api/analysis/{job_id}`)**:
+  * Xóa bản ghi trong PostgreSQL.
+  * Xóa file âm thanh vật lý trong MinIO.
+  * Lập tức gọi `cache.delete(job_id, owner_id)` để xóa cache trạng thái job.
+  * Lập tức gọi `cache.delete_stats(owner_id)` để xóa cache stats. Khi người dùng quay lại Dashboard, hệ thống sẽ tự động tính toán lại dữ liệu sạch từ Postgres và ghi đè cache stats mới.
 
 ---
 
-## Bảo Mật Đường Truyền & Mạng Nội Bộ (Security & Isolation)
+## Danh Sách API Công Khai (Endpoints)
+
+Dịch vụ backend chạy trên cổng nội bộ `8000` của container và được Reverse Proxy Nginx trỏ cổng `9090` trên host để định tuyến an toàn:
+
+### 1. Phân hệ Xác thực (Authentication)
+| Method | Path | Quyền hạn | Mục đích |
+|---|---|---|---|
+| POST | `/api/auth/register` | Công khai | Đăng ký tài khoản nhân viên mới (mặc định chờ kích hoạt) |
+| POST | `/api/auth/login` | Công khai | Đăng nhập và nhận mã JWT Token bảo mật |
+
+### 2. Phân hệ Phân tích & Thống kê cá nhân
+| Method | Path | Quyền hạn | Mục đích |
+|---|---|---|---|
+| POST | `/api/analysis/audio` | Nhân viên/Admin| Tải file ghi âm cuộc gọi lên MinIO & gửi vào hàng đợi RabbitMQ |
+| POST | `/api/analysis/text` | Nhân viên/Admin| Gửi trực tiếp văn bản hội thoại để phân tích cảm xúc |
+| GET | `/api/analysis` | Nhân viên/Admin| Lấy danh sách lịch sử phiên cá nhân (phân trang) |
+| GET | `/api/analysis/{job_id}` | Nhân viên/Admin| Lấy kết quả phân tích chi tiết của một phiên thuộc sở hữu cá nhân |
+| PATCH | `/api/analysis/{job_id}` | Nhân viên/Admin| Đổi tên phiên làm việc cá nhân |
+| DELETE| `/api/analysis/{job_id}` | Nhân viên/Admin| Xoá phiên, xóa file MinIO vật lý và dọn dẹp Redis cache |
+| GET | `/api/analysis/stats` | Nhân viên/Admin| Tổng hợp chỉ số hiệu suất cá nhân hiển thị lên Dashboard |
+
+### 3. Phân hệ Quản trị (Admin Operations)
+| Method | Path | Quyền hạn | Mục đích |
+|---|---|---|---|
+| GET | `/api/admin/employees` | Chỉ Admin | Lấy danh sách nhân viên kèm hiệu năng, điểm số và sentiment |
+| GET | `/api/admin/employees/{id}/stats` | Chỉ Admin | Xem Dashboard thống kê chi tiết của một nhân viên cụ thể |
+| GET | `/api/admin/employees/{id}/sessions`| Chỉ Admin | Xem danh sách lịch sử phiên làm việc của một nhân viên cụ thể |
+| GET | `/api/admin/users` | Chỉ Admin | Lấy danh sách tất cả các tài khoản hệ thống để duyệt duyệt |
+| PATCH | `/api/admin/users/{id}/status` | Chỉ Admin | Kích hoạt (Duyệt) hoặc Vô hiệu hóa một tài khoản người dùng |
+| PATCH | `/api/admin/users/{id}/role` | Chỉ Admin | Thay đổi vai trò (quyền hạn) của một tài khoản (`admin` <-> `employee`) |
+
+---
+
+## Quản lý Cơ sở Dữ liệu (Alembic Migrations)
+
+Cấu trúc cơ sở dữ liệu được quản lý tự động hoàn toàn bằng **Alembic**. Khi khởi tạo container backend, tập lệnh khởi chạy sẽ gọi lệnh di cư tự động lên phiên bản mới nhất (`head`) trước khi uvicorn khởi động.
+
+Dự án sử dụng tệp di cư hợp nhất:
+* `0001_initial_schema.py`: Thực hiện thiết lập đồng thời tất cả các bảng dữ liệu liên quan (`roles`, `users`, `user_role`, `analysis_jobs`, `analysis_results`), thiết lập ràng buộc khóa ngoại bảo vệ dữ liệu, đồng thời tự động chèn dữ liệu mẫu (Seed Data) bao gồm 2 vai trò mặc định và tài khoản quản trị viên tối cao ban đầu (`admin` / `admin123`).
+
+---
+
+## Cấu Hình Tập Trung & Bảo Mật Triển Khai
 
 > [!IMPORTANT]
-> **Container Isolation**: Cổng container `8000` của Backend hoàn toàn **không được ánh xạ ra ngoài host**. Mọi giao tiếp từ người dùng bên ngoài hay Frontend trình duyệt đều bắt buộc phải đi qua Reverse Proxy Nginx ở cổng **`9090`**. Thiết lập này giúp bảo vệ tối đa các Endpoint nghiệp vụ, ngăn chặn tấn công bypass trực diện và tuân thủ chặt chẽ nguyên tắc bảo mật production-grade.
+> - **Cấu hình tập trung Master `.env`**: Backend được nạp toàn bộ cấu hình (kết nối database, redis, rabbitmq, minio, cors) từ duy nhất tệp `.env` chung ở thư mục root thông qua cơ chế ánh xạ biến của `docker-compose.yml`. Đảm bảo Docker Image của backend là hoàn toàn bất biến (Stateless & Immutable), không chứa bất kỳ mật khẩu hay khóa bảo mật nhạy cảm nào khi được upload lên các registries (Docker Hub).
+> - **Bức tường lửa Nginx**: Cổng `8000` của container backend hoàn toàn ẩn giấu, chỉ cho phép nhận các kết nối chuyển tiếp nội bộ từ reverse proxy Nginx. Giúp bảo vệ hệ thống tuyệt đối trước các đợt tấn công quét cổng và xâm nhập API trực tiếp.

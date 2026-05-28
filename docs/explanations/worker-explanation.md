@@ -2,10 +2,10 @@
 
 ## Mục đích
 
-Để tối ưu hóa hiệu năng, tăng khả năng mở rộng (scale) và nâng cao tính tái sử dụng, hệ thống xử lý nền (background worker) của dự án đã được phân tách hoàn chỉnh thành hai dịch vụ microservices độc lập:
+Để tối ưu hóa hiệu năng, tăng khả năng mở rộng (scale) và nâng cao tính tái sử dụng, hệ thống xử lý nền (background worker) của dự án được phân tách hoàn chỉnh thành hai dịch vụ microservices độc lập hoạt động cực kỳ ăn ý:
 
-1.  **`voice-worker` (Stateless ASR Web Server)**: Dịch vụ FastAPI thuần túy nhận nhiệm vụ chuyển đổi giọng nói thành văn bản (Speech-to-Text) bằng mô hình `faster-whisper` chạy cục bộ trên CPU.
-2.  **`llm-worker` (RabbitMQ Orchestrator)**: Dịch vụ tiêu thụ tin nhắn từ hàng đợi RabbitMQ, điều phối quy trình tải file từ MinIO, gọi dịch vụ `voice-worker` để lấy văn bản hội thoại, gọi mô hình LLM tương thích OpenAI từ xa để phân tích sắc thái cảm xúc và đánh giá hiệu suất nhân viên, và lưu trữ kết quả vào PostgreSQL và Redis cache.
+1. **`voice-worker` (Stateless ASR & Diarization Web Server)**: Dịch vụ FastAPI thuần túy nhận nhiệm vụ chuyển đổi giọng nói thành văn bản (Speech-to-Text) bằng mô hình `faster-whisper` chạy cục bộ trên CPU kết hợp với phân đoạn người nói (Speaker Diarization) sử dụng mô hình ONNX siêu nhẹ.
+2. **`llm-worker` (RabbitMQ Orchestrator & Two-Pass LLM Client)**: Dịch vụ tiêu thụ tin nhắn từ hàng đợi RabbitMQ, điều phối quy trình tải file từ MinIO, gọi dịch vụ `voice-worker` để lấy văn bản hội thoại phân đoạn, thực hiện quy trình LLM 2 bước (Two-Pass LLM) để gán vai hội thoại chính xác và đánh giá nhân viên, sau đó lưu trữ kết quả vào PostgreSQL và Redis cache.
 
 ---
 
@@ -14,144 +14,97 @@
 ```text
 ├── voice-worker/
 │   ├── app/main.py                         ← Điểm khởi chạy FastAPI exposes cổng 8000 (Host: 9095)
-│   ├── app/core/config.py                  ← Cấu hình môi trường riêng cho ASR (mô hình, ngôn ngữ)
-│   ├── app/infrastructure/ai/              ← Bộ điều hợp gọi cục bộ faster-whisper STT
-│   │   └── whisper_stt_client.py           ← FFmpeg audio normalization + faster-whisper inference
-│   ├── Dockerfile                          ← Cài đặt Python, FFmpeg, và các thư viện ASR
-│   ├── requirements.txt                    ← Thư viện hỗ trợ: fastapi, faster-whisper, httpx, uvicorn
-│   └── .env                                ← File cấu hình cục bộ cho voice-worker
+│   ├── app/core/config.py                  ← Cấu hình môi trường qua Pydantic Settings
+│   ├── app/infrastructure/ai/              ← Các module AI cục bộ
+│   │   ├── whisper_stt_client.py           ← FFmpeg audio normalization + faster-whisper inference
+│   │   └── speaker_diarization.py          ← Phân đoạn người nói qua WeSpeaker ONNX + NumPy K-Means
+│   ├── Dockerfile                          ← Cài đặt Python, FFmpeg, ONNX Runtime và các thư viện ASR
+│   └── requirements.txt                    ← Thư viện hỗ trợ: fastapi, faster-whisper, onnxruntime, kaldi-native-fbank
 │
 ├── llm-worker/
-│   ├── app/main.py                         ← Điểm chạy nền lắng nghe RabbitMQ và khởi tạo logs
+│   ├── app/main.py                         ← Điểm chạy nền lắng nghe RabbitMQ
 │   ├── app/core/config.py                  ← Cấu hình kết nối tới DB, Cache, Queue, LLM và voice-worker
-│   ├── app/domain/analysis.py              ← Định nghĩa thực thể Domain hội thoại và kết quả phân tích
 │   ├── app/application/use_cases/
 │   │   └── analyze_job.py                  ← Use case điều phối: audio/text → STT → LLM → DB/Cache
 │   ├── app/infrastructure/ai/
-│   │   └── llm_client.py                   ← Client gọi LLM bên ngoài, trả về sentiment + agent evaluation
+│   │   └── llm_client.py                   ← Client gọi LLM bên ngoài với cơ chế Two-Pass (Role Mapping + Analysis)
 │   ├── app/infrastructure/database/        ← SQLAlchemy repository lưu kết quả bền vững vào Postgres
 │   ├── app/infrastructure/storage/         ← S3 Client tải file âm thanh nguồn từ MinIO
 │   ├── app/infrastructure/cache/           ← Redis Client cập nhật bộ nhớ đệm cache trạng thái công việc
-│   ├── app/infrastructure/queue/           ← RabbitMQ consumer lắng nghe hàng đợi 'analysis.jobs'
-│   ├── Dockerfile                          ← Image siêu nhẹ chứa thư viện Python (không cần FFmpeg/Whisper)
-│   ├── requirements.txt                    ← Thư viện hỗ trợ: pika, sqlalchemy, redis, minio, httpx
-│   └── .env                                ← File cấu hình cục bộ cho llm-worker
+│   ├── app/infrastructure/queue/           ← RabbitMQ consumer lắng nghe đa hàng đợi 'analysis.jobs'
+│   └── Dockerfile                          ← Image siêu nhẹ chứa thư viện Python (không cần FFmpeg/Whisper)
 ```
 
 ---
 
 ## Phân tích Chi tiết Từng Dịch Vụ
 
-### 1. `voice-worker` (Stateless ASR)
-*   **Thiết kế Stateless**: Hoàn toàn không kết nối tới cơ sở dữ liệu Postgres, bộ nhớ đệm Redis hay hàng đợi RabbitMQ. Dịch vụ hoạt động như một máy chủ API độc lập trong mạng LAN.
-*   **API Đầu Vào**: Cung cấp API `POST /api/transcribe` nhận tệp âm thanh dạng multipart form-data.
-*   **Whisper STT (`whisper_stt_client.py`)**: Sử dụng thư viện `faster-whisper` tối ưu hóa cao chạy trên CPU. Khi chạy lần đầu, mô hình `small` được tự động tải từ Hugging Face xuống bộ nhớ cache `/root/.cache` của container để tái sử dụng ngay lập tức trong các lần tiếp theo.
-*   **Ngôn ngữ**: Mặc định cấu hình tự động nhận diện ngôn ngữ (`auto`) để hỗ trợ chuyển dịch đa ngôn ngữ một cách linh hoạt nhất.
-*   **Timeout**: `llm-worker` gọi `voice-worker` với timeout `httpx.Client(timeout=1800)` — 30 phút. Nếu `voice-worker` chưa tải xong mô hình hoặc container bị tắt, sẽ xảy ra lỗi `Voice-worker STT service connection failed: timed out`. Khắc phục: kiểm tra `docker compose logs voice-worker` để đảm bảo container đã sẵn sàng.
+### 1. `voice-worker` (Stateless ASR & Diarization)
 
-### 2. `llm-worker` (RabbitMQ Orchestrator)
-*   **Quy trình Xử lý Công việc (Job Flow)** trong `analyze_job.py`:
-    1.  Tiêu thụ tin nhắn phân tích từ hàng đợi `analysis.jobs` trên RabbitMQ.
-    2.  Đánh dấu trạng thái công việc là `processing` trong PostgreSQL và Redis.
-    3.  **Nếu là Job âm thanh**:
-        *   Tải file âm thanh tương ứng từ MinIO bucket `uploads`.
-        *   Gửi file âm thanh qua HTTP POST request tới `voice-worker` tại địa chỉ nội bộ `http://voice-worker:8000/api/transcribe`.
-        *   Nhận về danh sách các phân đoạn hội thoại (segments) kèm mốc thời gian (start/end seconds).
-    4.  **Nếu là Job văn bản**: Bỏ qua bước STT, sử dụng trực tiếp nội dung văn bản truyền xuống.
-    5.  Gửi dữ liệu cuộc hội thoại đến mô hình LLM tương thích OpenAI qua địa chỉ `LLM_BASE_URL` bằng client `llm_client.py` với cấu trúc prompt nghiêm ngặt bắt buộc trả về JSON.
-    6.  Nhận về JSON kết quả gồm: tóm tắt cuộc gọi (`summary`), sắc thái cảm xúc tổng quan (`sentiment`), lý do đánh giá (`sentiment_reason`), điểm tự tin (`confidence`), **điểm nhân viên** (`agent_score` 0–10), và **lời khuyên nhân viên** (`agent_advice` danh sách hành động).
-    7.  Lưu kết quả bền vững vào PostgreSQL (bao gồm `agent_score` và `agent_advice_json`) và cập nhật trạng thái `completed` trong bộ nhớ đệm Redis cache.
-    8.  Gửi tín hiệu xác nhận (Acknowledge) hoàn thành tin nhắn lên RabbitMQ.
+* **Thiết kế Stateless**: Dịch vụ hoạt động độc lập và hoàn toàn không kết nối tới cơ sở dữ liệu Postgres, Redis hay hàng đợi RabbitMQ, đóng vai trò như một máy chủ API nội bộ cực kỳ an toàn.
+* **API Đầu Vào**: Cung cấp API `POST /api/transcribe` nhận tệp âm thanh dạng multipart form-data.
+* **Quy trình xử lý âm thanh**:
+  1. **Chuẩn hóa Âm thanh (FFmpeg Normalization)**: Tệp ghi âm (như WebM Opus từ mic trình duyệt hoặc file MP3) sẽ được tự động chuyển đổi thông qua RAM pipe (không lưu xuống đĩa) thành định dạng chuẩn **Linear PCM, 1 Mono channel, 16kHz, 16-bit WAV** bằng công cụ FFmpeg subprocess.
+  2. **Giải mã Chuyển văn bản (Whisper STT)**: Sử dụng mô hình `small` của `faster-whisper` tối ưu hóa chạy trực tiếp trên CPU với kiểu lượng tử hóa `int8` để giảm thiểu dung lượng RAM chiếm dụng.
+  3. **Phân tách Người nói (WeSpeaker ONNX Diarization)**: 
+     - Dịch vụ tự động tải mô hình WeSpeaker ResNet34 ONNX (~7 MB) trực tiếp từ Hugging Face CDN ở lần chạy đầu tiên.
+     - Với mỗi phân đoạn câu thoại do Whisper giải mã, dịch vụ trích xuất 80-dim log-Mel filterbank và chạy inference ONNX Runtime để tính toán **vector nhúng đặc trưng giọng nói (256-dim speaker embedding)**.
+     - Sau đó, hệ thống áp dụng thuật toán **K-Means Clustering (k=2) viết thuần túy bằng thư viện NumPy** (PyTorch-free & HuggingFace-gating-free) để chia nhóm các phân đoạn câu thoại thành `"Speaker 0"` và `"Speaker 1"`.
 
 ---
 
-## Cấu trúc JSON Kết Quả LLM
+### 2. `llm-worker` (RabbitMQ Orchestrator & Two-Pass LLM)
 
-LLM được yêu cầu trả về JSON có cấu trúc sau (bắt buộc qua prompt engineering):
+* **Điều phối không đồng bộ (Orchestrator) & Quản lý Cache**: 
+  Dịch vụ lắng nghe tin nhắn công việc từ đa hàng đợi RabbitMQ (`analysis.jobs`), tự động cập nhật trạng thái đồng thời lên Postgres và Redis cache riêng biệt của người dùng (`owner_id`) theo vòng đời:
+  * **Processing**: Cập nhật trạng thái trong Redis thành `processing` ngay khi worker bắt đầu xử lý âm thanh.
+  * **Completed**: Khi kết thúc thành công, lưu kết quả bền vững vào Postgres, đồng thời lưu kết quả vào Redis dưới khóa `cache:user:{owner_id}:analysis:{job_id}` giúp Frontend lấy ngay tức thì.
+  * **Failed**: Nếu có lỗi xảy ra, ghi nhận lỗi vào database và cập nhật trạng thái cache thành `failed` kèm nội dung `error_message`.
+  * **Xóa Stats Cache (Smart Invalidation)**: Khi Job hoàn thành thành công, `llm-worker` chủ động gọi `self.cache.delete_stats(owner_id)` để thu hồi cache thống kê cũ của người dùng. Lần tiếp theo người dùng truy cập giao diện Dashboard, Backend sẽ tính toán dữ liệu thống kê mới nhất (bao gồm cả job vừa hoàn thành) để hiển thị chính xác 100%.
+* **Cơ chế gọi LLM 2 bước (Two-Pass LLM Analysis)**:
+  Do kết quả phân tách giọng nói từ `voice-worker` trả về ở dạng nhãn nặc danh (`Speaker 0` và `Speaker 1`), `llm_client.py` sẽ thực thi luồng gọi LLM 2 bước thông minh:
+  * **Pass 1: Semantic Role Mapping (Gán vai hội thoại)**:
+    Gửi 10 lượt hội thoại đầu tiên làm excerpt lên LLM cùng định nghĩa nghiệp vụ. LLM sẽ phân tích ngữ cảnh giao tiếp (chào hỏi, hỏi thông tin, tư vấn...) để dịch nhãn nặc danh thành vai trò thực tế:
+    `"Speaker 0" -> "Nhân viên"` và `"Speaker 1" -> "Khách hàng"` (hoặc ngược lại).
+  * **Pass 2: Phân tích & Đánh giá (Full Analysis & Evaluation)**:
+    Sau khi đã chuẩn hóa vai thoại, toàn bộ nội dung hội thoại hoàn chỉnh sẽ được gửi lên LLM để thực hiện phân tích tổng hợp: tóm tắt cuộc gọi (`summary`), sắc thái cảm xúc (`sentiment`), lý do đánh giá (`sentiment_reason`), điểm tự tin (`confidence`), đặc biệt là **chấm điểm kỹ năng CSKH của nhân viên** (`agent_score` từ 0-100đ) và **đưa ra các lời khuyên hành động thực tiễn** (`agent_advice`).
+
+---
+
+## Cấu trúc JSON Kết Quả Phân Tích
+
+Mô hình LLM được ràng buộc nghiêm ngặt bằng Prompt Engineering để trả về định dạng JSON cấu trúc:
 
 ```json
 {
-  "summary": ["Bullet điểm 1", "Bullet điểm 2"],
+  "summary": [
+    "Khách hàng gọi điện phản ánh đơn hàng bị trễ hạn.",
+    "Nhân viên đã xin lỗi và kiểm tra mã vận đơn hỗ trợ khách nhiệt tình."
+  ],
   "sentiment": "positive | neutral | negative",
-  "sentiment_reason": "Lý do đánh giá sắc thái",
-  "confidence": 0.92,
-  "agent_score": 8,
+  "sentiment_reason": "Cuộc gọi ban đầu tiêu cực nhưng nhân viên đã khéo léo giải quyết giúp khách hàng vui vẻ trở lại.",
+  "confidence": 0.95,
+  "agent_score": 85,
   "agent_advice": [
-    "Lời khuyên hành động 1 cho nhân viên",
-    "Lời khuyên hành động 2 cho nhân viên"
+    "Nên chủ động cung cấp thông tin giảm giá hoặc voucher bù đắp cho việc trễ đơn.",
+    "Giữ vững tốc độ phản hồi nhanh nhẹn hiện tại."
   ]
 }
 ```
 
-`agent_score` phản ánh chất lượng phục vụ của nhân viên (0 = rất kém, 10 = xuất sắc).  
-`agent_advice` là danh sách các gợi ý cụ thể để nhân viên cải thiện trong lần tương tác tiếp theo.
+---
+
+## Xử Lý Lỗi & Độ Bền Bỉ (Resilience)
+
+Hệ thống được chứng minh khả năng tự khôi phục và phục hồi kết nối ổn định thông qua test-suite Giai đoạn 7:
+
+* **Tự kết nối lại (Auto Reconnect)**: Nếu kết nối mạng tới Postgres, Redis hoặc RabbitMQ bị đứt quãng, các driver (`pika`, `sqlalchemy`, `redis-py`) sẽ tự động rơi vào trạng thái chờ và kết nối lại khi hạ tầng online trở lại.
+* **Bảo vệ luồng (Error Propagation)**: Mọi lỗi xảy ra (Timeout khi gọi STT, LLM trả về JSON lỗi, MinIO mất file) đều được bắt (`try-except`) để đánh dấu trạng thái Job là `failed` trên Postgres và Redis, đồng thời ghi nhận nội dung `error_message` phục vụ chẩn đoán, tránh gây crash hay treo container.
 
 ---
 
-## Chuẩn hóa Âm thanh (Audio Normalization)
+## Quản lý cấu hình tập trung Master `.env`
 
-Quy trình chuẩn hóa âm thanh nằm tại `voice-worker` sử dụng công cụ `ffmpeg` chạy dưới dạng tiến trình con (subprocess), đặt tại `voice-worker/app/infrastructure/ai/whisper_stt_client.py`.
-Mọi tệp tin âm thanh ghi âm từ trình duyệt (định dạng WebM Opus) hoặc các file nhạc (MP3, WAV) sẽ được tự động chuyển đổi thông qua RAM pipe thành định dạng chuẩn **Linear PCM, 1 Mono channel, 16kHz, 16-bit WAV**, đảm bảo tỷ lệ nhận dạng của Whisper đạt mức chính xác nhất mà không cần lưu trữ file tạm xuống đĩa cứng.
+Tất cả các file `.env` cục bộ nằm trong thư mục của từng Worker đã được di chuyển hoàn chỉnh ra tệp **Master [`.env`](file:///d:/voice-sentiment/.env) ở thư mục root**. 
 
----
-
-## Xử Lý Lỗi & Độ Bền Bỉ (Error Handling)
-
-| Tình huống | Hành động |
-|---|---|
-| `voice-worker` không phản hồi (timeout) | Log lỗi, đánh dấu Job `failed`, lưu `error_message` vào DB |
-| LLM không trả về JSON hợp lệ | Bắt exception, đánh dấu Job `failed` |
-| MinIO file không tìm thấy | Exception → Job `failed` |
-| Kết nối RabbitMQ bị ngắt | `pika` tự động reconnect theo cấu hình |
-| Job thất bại | Redis cache được cập nhật `status: failed`, UI hiển thị thông báo lỗi |
-
----
-
-## Biến Môi trường Tương ứng
-
-*   **`voice-worker/.env`**:
-    ```ini
-    VOICE_MODEL_SIZE=small
-    VOICE_COMPUTE_TYPE=int8
-    VOICE_DEVICE=cpu
-    ```
-*   **`llm-worker/.env`**:
-    ```ini
-    # Database, Cache and Queue
-    DATABASE_URL=postgresql://postgres:postgres@postgres:5432/voice_sentiment
-    REDIS_URL=redis://redis:6379/0
-    RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-    
-    # Storage (MinIO)
-    MINIO_ENDPOINT=minio:9000
-    MINIO_ACCESS_KEY=minioadmin
-    MINIO_SECRET_KEY=minioadmin
-    MINIO_BUCKET_NAME=uploads
-    
-    # STT Service API
-    VOICE_SERVER_URI=http://voice-worker:8000
-    
-    # LLM Service API
-    LLM_BASE_URL=http://192.168.2.74:8007/v1
-    LLM_API_KEY=
-    LLM_MODEL=google/gemma-4-E4B-it
-    ```
-
----
-
-## Giám Sát & Debug
-
-```powershell
-# Xem log thời gian thực của cả hai worker
-docker compose logs -f voice-worker llm-worker
-
-# Kiểm tra voice-worker đã sẵn sàng chưa (mô hình Whisper đã tải chưa)
-docker compose logs voice-worker | Select-String "Uvicorn running"
-
-# Kiểm tra trạng thái hàng đợi RabbitMQ
-# Truy cập: http://localhost:9094 (guest/guest)
-# Xem queue 'analysis.jobs' → Messages ready / Unacked / Total
-
-# Xem lại kết quả phân tích trong DB
-docker exec -it voice-sentiment-postgres-1 psql -U postgres -d voice_sentiment -c "SELECT id, status, error_message FROM analysis_jobs ORDER BY created_at DESC LIMIT 5;"
-```
+Khi chạy docker compose, các tham số cấu hình ASR của `voice-worker` (như `VOICE_LANGUAGE_CODE`, `PYTHONUNBUFFERED`) và cấu hình nghiệp vụ của `llm-worker` (như `VOICE_SERVER_URI`, `LLM_BASE_URL`, `LLM_MODEL`) sẽ được nạp động từ tệp root này, giúp giữ cho các container luôn sạch sẽ và bảo mật tối ưu nhất khi đóng gói.

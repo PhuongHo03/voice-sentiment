@@ -81,8 +81,28 @@ def get_stats(
     session: Session = Depends(get_session),
     current_user: UserModel = Depends(get_current_user)
 ) -> dict:
+    cache = RedisJobCache()
+    # Try fetching from Redis cache first
+    try:
+        cached_stats = cache.get_stats(current_user.id)
+        if cached_stats is not None:
+            return cached_stats
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to read stats cache for user {current_user.id}: {e}")
+
+    # Fallback to PostgreSQL heavy aggregation query
     repository = SqlAlchemyAnalysisRepository(session)
-    return repository.get_analytics_stats(owner_id=current_user.id)
+    stats = repository.get_analytics_stats(owner_id=current_user.id)
+
+    # Save to Redis cache for future requests (24 hours TTL)
+    try:
+        cache.set_stats(current_user.id, stats)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to write stats cache for user {current_user.id}: {e}")
+
+    return stats
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
@@ -181,7 +201,9 @@ def delete_session(
             pass
     
     try:
-        RedisJobCache().delete(job_id, owner_id=current_user.id)
+        cache = RedisJobCache()
+        cache.delete(job_id, owner_id=current_user.id)
+        cache.delete_stats(current_user.id)
     except Exception:
         pass
         

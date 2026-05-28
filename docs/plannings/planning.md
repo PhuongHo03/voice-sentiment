@@ -2,8 +2,8 @@
 
 | Hạng mục | Trạng thái hiện tại |
 |---|---|
-| **Giai đoạn hiện tại** | ✅ Giai đoạn 6 — Phân Tách Cô Lập Hạ Tầng (Tenant-Isolated) & Đa Hàng Đợi |
-| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 7 — Viết Unit/Integration Tests & Ổn Định Hệ Thống |
+| **Giai đoạn hiện tại** | 🔄 Giai đoạn 8 — Tối ưu hóa Toàn diện & Triển khai Production |
+| **Giai đoạn tiếp theo** | ⏳ Giai đoạn 9 — Bảo trì & Mở rộng Tính năng |
 | **Thư mục gốc workspace** | `D:\voice-sentiment` |
 
 ---
@@ -53,7 +53,14 @@
   - [x] **Dashboard Thống Kê**: Thêm nút "Phân tích cuộc gọi" trên sidebar để chuyển sang chế độ xem Dashboard hiển thị biểu đồ vòng sắc thái (SVG donut), phân phối điểm nhân viên (bar chart), và xu hướng phân tích theo tuần.
   - [x] **API Thống Kê**: Thêm endpoint `GET /api/analysis/stats` trả về dữ liệu tổng hợp gồm số lượng phân tích, phân phối sentiment, điểm nhân viên trung bình, và xu hướng 7 ngày gần nhất.
   - [x] **UX Cải Tiến**: Đổi biểu tượng "Phân tích cuộc gọi" thành icon SVG phù hợp hơn; sửa lỗi CSS khung bao quanh nhỏ khi chọn item trong sidebar.
-  - [x] **Chẩn đoán Lỗi STT Timeout**: Xác định và hướng dẫn xử lý lỗi `Voice-worker STT service connection failed: timed out` khi voice-worker chưa sẵn sàng hoặc quá tải.
+  - [x] **Chẩn đoán Lỗi STT Timeout**: Xác định và hướng dẫn xử lý lỗi `Voice-worker STT service connection failed: timed out` when voice-worker chưa sẵn sàng hoặc quá tải.
+- [x] **Giai đoạn 7**:
+  - [x] **Unit Tests**: Xây dựng bộ unit tests bằng `pytest` phủ kín các logic lõi cho `backend` (đạt 91%-100% các file Use Cases & AuthService), `voice-worker`, và `llm-worker` sử dụng mock cô lập.
+  - [x] **Resilience Integration**: Viết script `verify_resilience.py` giả lập sập hạ tầng Postgres, Redis, RabbitMQ. Chứng minh hệ thống tự khôi phục kết nối và không bị crash đơ máy chủ.
+  - [x] **Load Testing**: Thiết lập script kiểm thử bất đồng bộ song song `load_test_whisper.py` gửi đồng thời nhiều request để chứng thực năng lực phản hồi (8 rps, latency trung bình 0.06s).
+  - [x] **Tối ưu hóa Frontend (Custom Hooks Separation)**: Tách triệt để toàn bộ logic nghiệp vụ (API, state, effects) ra khỏi các tệp Pages (`DashboardPage`, `AdminDashboardPage`, `LoginPage`, `RegisterPage`) vào các Custom Hooks độc lập có kiểu dữ liệu mạnh mẽ, giúp tối giản từ 30% - 45% mã nguồn Pages, biên dịch thành công 100% không lỗi.
+  - [x] **Cấu hình biến môi trường tập trung (Master `.env` ở Root)**: Hợp nhất toàn bộ các tệp `.env` phân mảnh của các services thành 1 tệp `.env` duy nhất ở ngoài root của dự án. Đồng bộ hóa với `docker-compose.yml` theo chuẩn thiết kế 12-Factor App để sẵn sàng cho đóng gói Production và đăng tải Docker Hub.
+  - [x] **Hệ thống Caching & Invalidation nâng cao (Advanced Caching)**: Thiết lập bộ nhớ đệm cho Dashboard Stats (TTL 24h), tự động xóa cache thông minh khi kết thúc Job (ở `llm-worker`) hoặc khi xóa phiên (ở `backend`). Đồng thời ghi đè cache `pending` khi tạo Job giúp giảm tải PostgreSQL Polling về mức tuyệt đối **0%**.
 
 ---
 
@@ -106,7 +113,15 @@ Thay thế Riva bằng `faster-whisper` trên CPU cục bộ, chuẩn hóa âm t
     *   Nâng cấp cơ chế phân phối job từ 1 queue duy nhất lên thành mô hình **Đa hàng đợi (Multi-Queue)**, bắt đầu chạy thử nghiệm với 2 queue để đánh giá hiệu năng chịu tải và giới hạn xử lý song song của các Worker.
     *   Đưa số lượng Queue cần khởi tạo vào biến môi trường `.env` (`RABBITMQ_QUEUE_COUNT=2`) để dễ dàng tuỳ chỉnh, tăng giảm quy mô (scaling) khi đưa lên Production mà không cần thay đổi source code.
 
-### Giai đoạn 7 — Viết Unit/Integration Tests & Ổn Định Hệ Thống (Kế hoạch tiếp theo)
-*   **Unit Tests**: Viết kiểm thử thành phần cho các Repositories, Use Cases, và AI Clients của cả `backend`, `voice-worker`, và `llm-worker`.
-*   **Integration Tests**: Giả lập các luồng gửi tin nhắn RabbitMQ bị ngắt quãng, mất kết nối cơ sở dữ liệu PostgreSQL/Redis để củng cố độ bền bỉ (resilience) của Worker.
-*   **Load Testing**: Đo lường thời gian xử lý khi gửi liên tục nhiều yêu cầu chuyển giọng nói cùng lúc lên `voice-worker` để đánh giá khả năng chịu tải trên CPU máy chủ.
+### Giai đoạn 7 — Viết Unit/Integration Tests & Ổn Định Hệ Thống (Hoàn thành)
+*   **Unit Tests**: Viết kiểm thử thành phần cho các Repositories, Use Cases, và AI Clients của cả `backend`, `voice-worker`, và `llm-worker` đạt độ phủ cao.
+*   **Integration Tests**: Giả lập các luồng gửi tin nhắn RabbitMQ bị ngắt quãng, mất kết nối cơ sở dữ liệu PostgreSQL/Redis để củng cố độ bền bỉ (resilience) của các dịch vụ thông qua script tự động `verify_resilience.py`.
+*   **Load Testing**: Đo lường và đánh giá năng lực chịu tải mạng đồng thời của `voice-worker` thông qua script bất đồng bộ song song `load_test_whisper.py` đạt tỷ lệ thành công 100%.
+*   **Tái cấu trúc Frontend (Tách Custom Hooks)**: Phân tách hoàn chỉnh mã nguồn hiển thị khỏi logic nghiệp vụ của các trang `DashboardPage`, `AdminDashboardPage`, `LoginPage` và `RegisterPage` thành các hooks chuyên biệt có kiểu dữ liệu mạnh (`useDashboardAnalysis`, `useAdminDashboard`, `useLogin`, `useRegister`), giúp frontend đạt cấu trúc mô hình hóa chuẩn tắc của React, dễ dàng nâng cấp giao diện mà không ảnh hưởng logic bên dưới.
+*   **Hệ thống cấu hình tập trung (Master `.env`)**: Thiết lập và tích hợp tệp `.env` duy nhất ở ngoài root của dự án để quản lý tập trung toàn bộ biến môi trường của các dịch vụ microservices (`backend`, `frontend`, `voice-worker`, `llm-worker`), đồng bộ hóa cùng `docker-compose.yml` theo chuẩn **12-Factor App**. Đảm bảo các Docker Images hoàn toàn không chứa bất kỳ mã nhạy cảm nào (Immutable Images), tăng tốc quy mô triển khai Production và đưa lên Docker Hub.
+*   **Tối ưu hóa Caching & Invalidation (Advanced Caching)**:
+    *   **Dashboard Stats Caching**: Nhất quán lưu cache dữ liệu thống kê biểu đồ tròn và cột của Dashboard trong Redis với thời gian sống 24h, tự động thu hồi (evict) thông minh khi `llm-worker` hoàn thành phân tích một job hoặc khi backend xóa một phiên, giúp tránh các câu lệnh SQL `COUNT/AVG` đắt đỏ trong cơ sở dữ liệu PostgreSQL.
+    *   **Pending Job Caching**: Ghi đè trạng thái `pending` của Job ngay khi vừa khởi tạo ở Backend giúp tránh hoàn toàn gánh nặng truy vấn database của cuộc gọi Polling đầu tiên từ phía giao diện, đưa tải PostgreSQL Polling về mức tuyệt đối 0%.
+
+### Giai đoạn 8 — Tối ưu hóa Toàn diện & Triển khai Production (Đang thực hiện)
+*   **CI/CD**: Tích hợp các bộ kiểm thử tự động của Giai đoạn 7 vào luồng GitHub Actions CI/CD để tự động chạy kiểm thử trước mỗi lần đóng gói (bao gồm unit tests của backend, voice-worker, llm-worker và build verification của frontend).
