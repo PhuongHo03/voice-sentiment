@@ -17,7 +17,7 @@ jobs:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "postgresql://voice:voice@localhost/voice_sentiment"
+      DATABASE_URL: "postgresql+psycopg://voice:voice@localhost/voice_sentiment"
       REDIS_URL: "redis://localhost:6379"
       RABBITMQ_URL: "amqp://guest:guest@localhost:5672"
       MINIO_ENDPOINT: "localhost:9000"
@@ -74,7 +74,7 @@ jobs:
     name: LLM Worker Unit Tests
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "postgresql://voice:voice@localhost/voice_sentiment"
+      DATABASE_URL: "postgresql+psycopg://voice:voice@localhost/voice_sentiment"
       REDIS_URL: "redis://localhost:6379"
       RABBITMQ_URL: "amqp://guest:guest@localhost:5672"
       MINIO_ENDPOINT: "localhost:9000"
@@ -123,7 +123,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd frontend
-          npm ci
+          npm install
 
       - name: Compile and Build
         run: |
