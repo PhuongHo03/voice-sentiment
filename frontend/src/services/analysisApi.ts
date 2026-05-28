@@ -1,6 +1,6 @@
 import type { JobStatus } from '../types/analysis';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
 
 function getHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token = localStorage.getItem('voice_sentiment_token');
