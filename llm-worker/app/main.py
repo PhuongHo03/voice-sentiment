@@ -1,5 +1,6 @@
 import logging
-from app.infrastructure.queue.rabbitmq_consumer import RabbitMqAnalysisConsumer
+from app.configs.metrics import start_metrics_server
+from app.configs.queue import RabbitMqAnalysisConsumer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,5 +10,6 @@ logging.basicConfig(
 logger = logging.getLogger("llm_worker_main")
 
 if __name__ == "__main__":
-    logger.info("Starting RabbitMQ LLM Analysis Worker...")
+    start_metrics_server()
+    logger.info("Starting RabbitMQ LLM Analysis Worker with metrics on 0.0.0.0:9100...")
     RabbitMqAnalysisConsumer().start()

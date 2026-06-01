@@ -14,8 +14,11 @@
 ```text
 ├── voice-worker/
 │   ├── app/main.py                         ← Điểm khởi chạy FastAPI exposes cổng 8000 (Host: 9095)
-│   ├── app/core/config.py                  ← Cấu hình môi trường qua Pydantic Settings
-│   ├── app/infrastructure/ai/              ← Các module AI cục bộ
+│   ├── app/controllers/transcription_controller.py ← HTTP route POST /api/transcribe
+│   ├── app/configs/config.py               ← Cấu hình môi trường qua Pydantic Settings
+│   ├── app/configs/metrics.py              ← Prometheus /metrics, request/transcription counters và latency histograms
+│   ├── app/services/transcription_service.py ← Điều phối file bytes → Whisper/Diarization → response
+│   ├── app/ai/                             ← Các module AI cục bộ
 │   │   ├── whisper_stt_client.py           ← FFmpeg audio normalization + faster-whisper inference
 │   │   └── speaker_diarization.py          ← Phân đoạn người nói qua WeSpeaker ONNX + NumPy K-Means
 │   ├── Dockerfile                          ← Cài đặt Python, FFmpeg, ONNX Runtime và các thư viện ASR
@@ -23,15 +26,16 @@
 │
 ├── llm-worker/
 │   ├── app/main.py                         ← Điểm chạy nền lắng nghe RabbitMQ
-│   ├── app/core/config.py                  ← Cấu hình kết nối tới DB, Cache, Queue, LLM và voice-worker
-│   ├── app/application/use_cases/
-│   │   └── analyze_job.py                  ← Use case điều phối: audio/text → STT → LLM → DB/Cache
-│   ├── app/infrastructure/ai/
-│   │   └── llm_client.py                   ← Client gọi LLM bên ngoài với cơ chế Two-Pass (Role Mapping + Analysis)
-│   ├── app/infrastructure/database/        ← SQLAlchemy repository lưu kết quả bền vững vào Postgres
-│   ├── app/infrastructure/storage/         ← S3 Client tải file âm thanh nguồn từ MinIO
-│   ├── app/infrastructure/cache/           ← Redis Client cập nhật bộ nhớ đệm cache trạng thái công việc
-│   ├── app/infrastructure/queue/           ← RabbitMQ consumer lắng nghe đa hàng đợi 'analysis.jobs'
+│   ├── app/configs/config.py               ← Cấu hình kết nối tới DB, Cache, Queue, LLM và voice-worker
+│   ├── app/configs/metrics.py              ← Embedded Prometheus metrics server cổng nội bộ 9100
+│   ├── app/services/analyze_job.py         ← Service điều phối: audio/text → STT → LLM → DB/Cache
+│   ├── app/repositories/analysis_repository.py ← SQLAlchemy repository lưu kết quả bền vững vào Postgres
+│   ├── app/models/models.py                ← ORM models phản ánh bảng jobs/results/users liên quan
+│   ├── app/ai/llm_client.py                ← Client gọi LLM bên ngoài với cơ chế Two-Pass (Role Mapping + Analysis)
+│   ├── app/configs/database.py             ← Factory kết nối cơ sở dữ liệu
+│   ├── app/configs/storage.py              ← S3 Client tải file âm thanh nguồn từ MinIO
+│   ├── app/configs/cache.py                ← Redis Client cập nhật bộ nhớ đệm cache trạng thái công việc
+│   ├── app/configs/queue.py                ← RabbitMQ consumer lắng nghe đa hàng đợi 'analysis.jobs'
 │   └── Dockerfile                          ← Image siêu nhẹ chứa thư viện Python (không cần FFmpeg/Whisper)
 ```
 
@@ -100,6 +104,14 @@ Hệ thống được chứng minh khả năng tự khôi phục và phục hồ
 
 * **Tự kết nối lại (Auto Reconnect)**: Nếu kết nối mạng tới Postgres, Redis hoặc RabbitMQ bị đứt quãng, các driver (`pika`, `sqlalchemy`, `redis-py`) sẽ tự động rơi vào trạng thái chờ và kết nối lại khi hạ tầng online trở lại.
 * **Bảo vệ luồng (Error Propagation)**: Mọi lỗi xảy ra (Timeout khi gọi STT, LLM trả về JSON lỗi, MinIO mất file) đều được bắt (`try-except`) để đánh dấu trạng thái Job là `failed` trên Postgres và Redis, đồng thời ghi nhận nội dung `error_message` phục vụ chẩn đoán, tránh gây crash hay treo container.
+
+---
+
+## Observability với Prometheus
+
+- `voice-worker` expose `GET /metrics` trên cổng nội bộ `8000` để Prometheus scrape HTTP request metrics, transcription counters, upload size và transcription latency.
+- `llm-worker` không phải HTTP API nghiệp vụ, nên khởi động embedded Prometheus HTTP server trên cổng nội bộ `9100`. Prometheus scrape `llm-worker:9100/metrics` để lấy job counters, job duration, voice-worker call counters và LLM analytics call counters.
+- Các metrics này chỉ dành cho Prometheus trong mạng Docker; frontend không gọi trực tiếp worker `/metrics`.
 
 ---
 

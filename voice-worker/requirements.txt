@@ -6,3 +6,4 @@ python-multipart==0.0.19
 faster-whisper
 onnxruntime
 kaldi-native-fbank
+prometheus-client==0.21.1

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from '../context/AuthContext';
-import { DashboardPage } from '../pages/DashboardPage';
-import { LoginPage } from '../pages/LoginPage';
-import { RegisterPage } from '../pages/RegisterPage';
-import { AdminDashboardPage } from '../pages/AdminDashboardPage';
+import { AuthProvider, useAuth } from '../features/auth/states/AuthContext';
+import { DashboardPage } from '../features/analysis/screens/DashboardPage';
+import { LoginPage } from '../features/auth/screens/LoginPage';
+import { RegisterPage } from '../features/auth/screens/RegisterPage';
+import { AdminDashboardPage } from '../features/admin/screens/AdminDashboardPage';
 import '../styles/main.css';
 
 function AppContent() {
@@ -25,7 +25,11 @@ function AppContent() {
     
     if (mode === 'admin') {
       const activeTab = localStorage.getItem('admin_active_tab') || 'performance';
-      const newPath = activeTab === 'accounts' ? '/admin/accounts' : '/admin/employees';
+      const newPath = activeTab === 'accounts'
+        ? '/admin/accounts'
+        : activeTab === 'observability'
+          ? '/admin/observability'
+          : '/admin/employees';
       if (window.location.pathname !== newPath) {
         window.history.pushState({ mode, activeTab }, '', newPath);
       }

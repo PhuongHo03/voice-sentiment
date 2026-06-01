@@ -12,7 +12,7 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "voice-worker"}
 
-@patch("app.main.stt_client")
+@patch("app.controllers.transcription_controller.transcription_service.stt_client")
 def test_transcribe_audio_success(mock_stt_client):
     # Mock return value of transcribe
     mock_stt_client.transcribe.return_value = [
@@ -33,7 +33,7 @@ def test_transcribe_audio_success(mock_stt_client):
     assert data["turns"][0]["text"] == "Chào bạn"
     mock_stt_client.transcribe.assert_called_once_with(b"webm_binary_bytes_here")
 
-@patch("app.main.stt_client")
+@patch("app.controllers.transcription_controller.transcription_service.stt_client")
 def test_transcribe_audio_failure(mock_stt_client):
     # Mock transcribe to raise an exception
     mock_stt_client.transcribe.side_effect = RuntimeError("Whisper ASR failed")

@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from app.application.use_cases.submit_audio_analysis import SubmitAudioAnalysis
-from app.application.use_cases.submit_text_analysis import SubmitTextAnalysis
+from app.services.analysis_service import SubmitAudioAnalysis, SubmitTextAnalysis
 
 def test_submit_text_analysis_success():
     # 1. Mock dependency objects

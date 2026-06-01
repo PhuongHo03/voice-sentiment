@@ -67,8 +67,8 @@ redisinsight_data/
 # ============================================================
 # AI Model Files (large, not committed)
 # ============================================================
-voice-worker/app/infrastructure/ai/model/
-llm-worker/app/infrastructure/ai/model/
+voice-worker/app/ai/model/
+llm-worker/app/ai/model/
 
 # ============================================================
 # Audio & Media Upload Files

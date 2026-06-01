@@ -1,29 +1,21 @@
 import logging
-from fastapi import FastAPI, File, UploadFile, HTTPException
+
 import uvicorn
-from app.infrastructure.ai.whisper_stt_client import WhisperSpeechToTextClient
+from fastapi import FastAPI
+
+from app.configs.metrics import PrometheusMiddleware, metrics_response
+from app.controllers.transcription_controller import router as transcription_router
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("voice_worker_main")
 
 app = FastAPI(title="Voice ASR Web Server", description="Stateless Speech-to-Text API")
-stt_client = WhisperSpeechToTextClient()
-
-
-@app.post("/api/transcribe")
-def transcribe_audio(file: UploadFile = File(...)):
-    logger.info(f"Received transcription request for file: '{file.filename}' (Content-Type: '{file.content_type}')")
-    try:
-        content = file.file.read()
-        turns = stt_client.transcribe(content)
-        return {"filename": file.filename, "turns": turns}
-    except Exception as e:
-        logger.error(f"Failed to transcribe audio file: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+app.add_middleware(PrometheusMiddleware)
+app.include_router(transcription_router)
+app.add_api_route("/metrics", metrics_response, methods=["GET"], include_in_schema=False)
 
 
 @app.get("/health")

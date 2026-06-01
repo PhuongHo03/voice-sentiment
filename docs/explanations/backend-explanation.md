@@ -18,21 +18,20 @@ Dịch vụ backend hoàn toàn **stateless** và không chạy trực tiếp b�
 
 ```text
 backend/
-├── app/main.py                         ← Khởi chạy FastAPI và tự động đồng bộ DB schema qua Alembic
-├── app/core/config.py                  ← Cấu hình môi trường qua Pydantic Settings (DB, Cache, Queue, MinIO)
-├── app/application/use_cases/          ← Use cases lõi: gửi phân tích, đăng ký/đăng nhập tài khoản
-├── app/infrastructure/database/        ← SQLAlchemy models, session, và repositories
-│   ├── models.py                       ← ORM models: Role, User, AnalysisJobModel, AnalysisResultModel
-│   ├── analysis_repository.py          ← CRUD cho Job/Result & truy vấn thống kê Dashboard/Admin
-│   └── session.py                      ← Factory kết nối cơ sở dữ liệu
-├── app/infrastructure/storage/         ← Tải file âm thanh lên MinIO cô lập theo: uploads/{owner_id}/{filename}
-├── app/infrastructure/cache/           ← Redis adapter với khóa định danh phân tách namespace theo người dùng
-├── app/infrastructure/queue/           ← Đẩy tin nhắn không đồng bộ vào đa hàng đợi RabbitMQ
-├── app/interfaces/controllers/         ← Bộ điều khiển HTTP routing (Auth, Analysis, và Admin controllers)
-│   ├── auth_controller.py              ← API đăng ký, đăng nhập tài khoản
-│   ├── analysis_controller.py          ← Các API phiên phân tích và thống kê cá nhân
-│   └── admin_controller.py             ← Các API quản trị admin (kích hoạt user, đổi vai trò, xem tiến độ nhân viên)
-├── app/interfaces/schemas/             ← Pydantic schemas xác thực request/response payload
+├── app/main.py                         ← Khởi chạy FastAPI, đăng ký routers và tự động đồng bộ DB schema qua Alembic
+├── app/configs/                        ← Cấu hình môi trường, SQLAlchemy session, Redis, RabbitMQ, MinIO
+│   ├── config.py                       ← Pydantic Settings (DB, Cache, Queue, MinIO, JWT, CORS)
+│   ├── session.py                      ← Factory kết nối cơ sở dữ liệu
+│   ├── cache.py                        ← Redis adapter với namespace theo người dùng
+│   ├── queue.py                        ← Đẩy tin nhắn không đồng bộ vào đa hàng đợi RabbitMQ
+│   ├── metrics.py                      ← Prometheus /metrics, HTTP latency/counter và business counters
+│   └── storage.py                      ← Tải file âm thanh lên MinIO cô lập theo uploads/{owner_id}/...
+├── app/controllers/                    ← HTTP routing mỏng: Auth, Analysis, Files, Admin, Health
+├── app/dtos/                           ← Pydantic schemas xác thực request/response payload
+├── app/services/                       ← Luồng nghiệp vụ: auth, analysis, file storage, admin operations
+├── app/repositories/                   ← SQLAlchemy data access cho users, admin queries, analysis jobs/results
+├── app/models/models.py                ← ORM models: Role, User, AnalysisJobModel, AnalysisResultModel
+├── app/middlewares/dependencies.py     ← FastAPI dependencies xác thực JWT và kiểm tra quyền admin
 └── alembic/versions/                   ← Tập lệnh migration tự động khởi tạo cơ sở dữ liệu
     └── 0001_initial_schema.py          ← Tập lệnh hợp nhất khởi tạo đầy đủ Schema & Dữ liệu Seed ban đầu
 ```
@@ -97,12 +96,12 @@ Bảng trung gian liên kết 1-nhiều hoặc nhiều-nhiều giữa bảng `us
 
 ## Luồng xử lý nghiệp vụ (Runtime Flow)
 
-1. **Xác thực yêu cầu**: Mọi yêu cầu tới API nghiệp vụ (trừ Đăng nhập/Đăng ký) đều phải gửi kèm JWT token qua Header `Authorization: Bearer <token>`. Dependency `get_current_user` của FastAPI sẽ xác minh tính hợp lệ và truy xuất thông tin tài khoản đang thao tác.
+1. **Xác thực yêu cầu**: Mọi yêu cầu tới API nghiệp vụ (trừ Đăng nhập/Đăng ký) đều phải gửi kèm JWT token qua Header `Authorization: Bearer <token>`. Dependency `get_current_user` trong `app/middlewares/dependencies.py` sẽ xác minh tính hợp lệ và truy xuất thông tin tài khoản đang thao tác qua `UserRepository`.
 2. **Gửi yêu cầu phân tích**:
    - **Âm thanh**: File âm thanh tải lên được đẩy vào MinIO với đường dẫn cô lập chứa ID người dùng (`uploads/{owner_id}/{filename}`). Backend ghi nhận một Job mới trạng thái `pending` trong Postgres (gán `owner_id = current_user.id`), đẩy tin nhắn công việc vào hàng đợi RabbitMQ (`analysis.jobs`), và trả về `job_id` lập tức.
    - **Văn bản**: Backend ghi nhận Job mới trong Postgres, đẩy tin nhắn thô chứa văn bản trực tiếp vào hàng đợi RabbitMQ mà không qua bước lưu trữ âm thanh hay gọi `voice-worker`.
 3. **Phòng vệ cách ly dữ liệu**:
-   - Khi nhân viên gọi danh sách phiên `GET /api/analysis` hoặc xem stats thống kê `GET /api/analysis/stats`, repository sẽ áp dụng bộ lọc nghiêm ngặt `owner_id = current_user.id`. Đảm bảo nhân viên này không thể xem trộm dữ liệu phân tích của nhân viên khác.
+   - Khi nhân viên gọi danh sách phiên `GET /api/analysis` hoặc xem stats thống kê `GET /api/analysis/stats`, service/repository sẽ áp dụng bộ lọc nghiêm ngặt `owner_id = current_user.id`. Đảm bảo nhân viên này không thể xem trộm dữ liệu phân tích của nhân viên khác.
 4. **Quyền hạn quản trị (Admin RBAC)**:
    - Các API quản trị dưới prefix `/api/admin/` yêu cầu tài khoản phải có vai trò `admin`. Admin có thể lấy danh sách toàn bộ nhân viên kèm hiệu năng tổng quát, kích hoạt/vô hiệu hóa tài khoản, đổi vai trò hoặc xem chi tiết biểu đồ Dashboard/Lịch sử làm việc của bất kỳ nhân viên nào.
 
@@ -164,6 +163,11 @@ Dịch vụ backend chạy trên cổng nội bộ `8000` của container và đ
 | PATCH | `/api/admin/users/{id}/status` | Chỉ Admin | Kích hoạt (Duyệt) hoặc Vô hiệu hóa một tài khoản người dùng |
 | PATCH | `/api/admin/users/{id}/role` | Chỉ Admin | Thay đổi vai trò (quyền hạn) của một tài khoản (`admin` <-> `employee`) |
 
+### 4. Observability nội bộ
+| Method | Path | Quyền hạn | Mục đích |
+|---|---|---|---|
+| GET | `/metrics` | Nội bộ Docker | Prometheus scrape HTTP metrics, auth events và analysis submission counters. Frontend không gọi endpoint này trực tiếp; Prometheus gom dữ liệu rồi Nginx expose Prometheus API tại `/observability/api/*`. |
+
 ---
 
 ## Quản lý Cơ sở Dữ liệu (Alembic Migrations)
@@ -180,3 +184,4 @@ Dự án sử dụng tệp di cư hợp nhất:
 > [!IMPORTANT]
 > - **Cấu hình tập trung Master `.env`**: Backend được nạp toàn bộ cấu hình (kết nối database, redis, rabbitmq, minio, cors) từ duy nhất tệp `.env` chung ở thư mục root thông qua cơ chế ánh xạ biến của `docker-compose.yml`. Đảm bảo Docker Image của backend là hoàn toàn bất biến (Stateless & Immutable), không chứa bất kỳ mật khẩu hay khóa bảo mật nhạy cảm nào khi được upload lên các registries (Docker Hub).
 > - **Bức tường lửa Nginx**: Cổng `8000` của container backend hoàn toàn ẩn giấu, chỉ cho phép nhận các kết nối chuyển tiếp nội bộ từ reverse proxy Nginx. Giúp bảo vệ hệ thống tuyệt đối trước các đợt tấn công quét cổng và xâm nhập API trực tiếp.
+
