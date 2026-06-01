@@ -117,6 +117,6 @@ Hệ thống được chứng minh khả năng tự khôi phục và phục hồ
 
 ## Quản lý cấu hình tập trung Master `.env`
 
-Tất cả các file `.env` cục bộ nằm trong thư mục của từng Worker đã được di chuyển hoàn chỉnh ra tệp **Master [`.env`](file:///d:/voice-sentiment/.env) ở thư mục root**. 
+Tất cả các file `.env` và `.env.example` cục bộ nằm trong thư mục của từng Worker đã được dọn khỏi service folder; cấu hình runtime dùng tệp **Master [`.env`](file:///d:/voice-sentiment/.env)** ở root và file mẫu duy nhất là root `.env.example`.
 
 Khi chạy docker compose, các tham số cấu hình ASR của `voice-worker` (như `VOICE_LANGUAGE_CODE`, `PYTHONUNBUFFERED`) và cấu hình nghiệp vụ của `llm-worker` (như `VOICE_SERVER_URI`, `LLM_BASE_URL`, `LLM_MODEL`) sẽ được nạp động từ tệp root này, giúp giữ cho các container luôn sạch sẽ và bảo mật tối ưu nhất khi đóng gói.
