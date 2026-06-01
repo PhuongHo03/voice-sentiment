@@ -30,7 +30,7 @@ Voice Sentiment is a production-ready call center analytics and quality assuranc
 | Component | Tech Stack | Current State |
 |---|---|---|
 | **Backend API** | FastAPI + SQLAlchemy + Alembic | Implemented: JWT Auth, RBAC roles, tenant data isolation, DB migrations, RabbitMQ job publisher |
-| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, SVG donut & weekly charts |
+| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, observability tab, SVG donut & weekly charts |
 | **Voice Worker** | faster-whisper + WeSpeaker ONNX | Implemented: stateless ASR, FFmpeg PCM 16kHz resampling, ResNet34 ONNX diarizer + NumPy K-Means clustering |
 | **LLM Worker** | RabbitMQ + remote LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM role mapping and QA score evaluation |
 | **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus observability via Nginx |
@@ -101,7 +101,17 @@ Ensure all containers are running and healthy:
 docker compose ps
 ```
 
-### 4. Running Tests in Containers
+### 4. Verify Prometheus Observability
+
+Prometheus is not queried through the backend. Nginx exposes the Prometheus HTTP API to the browser:
+
+```bash
+curl "http://localhost:9090/observability/api/v1/query?query=up"
+```
+
+Expected: `status: "success"` and `up=1` for `backend`, `voice-worker`, `llm-worker`, `postgres`, `redis`, `rabbitmq`, and `nginx`.
+
+### 5. Running Tests in Containers
 
 Execute unit tests within the core worker containers to verify health:
 
@@ -128,7 +138,7 @@ docker compose up -d postgres redis rabbitmq minio adminer redisinsight
 
 ### 2. Start Backend API Gateway
 
-Edit `backend/.env` or ensure host environment variables are set, then:
+Copy root `.env.example` to `.env` and ensure host environment variables are set, then:
 
 ```bash
 cd backend
@@ -219,7 +229,7 @@ python -m app.main
 | **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | `9095` |
 | **LLM Worker** | `llm-worker/` | Asynchronous RabbitMQ consumer and LLM client | Internal |
 | **Adminer** | `docker-compose.yml` | PostgreSQL DB client UI | `9091` |
-| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | `9002` (Console `9092`) |
+| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | S3 `9000`, Console `9092` |
 | **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `9093` |
 | **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `9094` |
 | **Prometheus API** | `infras/prometheus.yml` | Metrics query API exposed through Nginx `/observability/api` | `9090/observability/api` |
@@ -247,7 +257,7 @@ python -m app.main
 │   │   ├── features/
 │   │   │   ├── auth/                Login/register API, DTOs, state, screens, components
 │   │   │   ├── analysis/            Analysis API, DTOs, state helpers, dashboard screen, UI components
-│   │   │   └── admin/               Admin API, DTOs, state helpers, screen and presentational components
+│   │   │   └── admin/               Admin API, Prometheus API client, DTOs, state, metrics screen and components
 │   │   └── styles/                  Main CSS design system variables
 │   └── package.json
 │
@@ -261,15 +271,15 @@ python -m app.main
 │
 ├── llm-worker/                      Asynchronous Orchestrator & Two-Pass LLM Analyst
 │   ├── app/
-│   │   ├── configs/                 Settings for DB, cache, queue, LLM and voice-worker
+│   │   ├── configs/                 Settings, DB session, S3 MinIO, Redis cache, RabbitMQ consumer and metrics server
 │   │   ├── services/                AnalyzeJob orchestration service
 │   │   ├── repositories/            Postgres job/result persistence
 │   │   ├── models/                  SQLAlchemy ORM models
-│   │   ├── ai/                      Two-Pass LLM client
-│   │   └── configs/                 DB session, S3 MinIO, Redis cache and RabbitMQ consumer
+│   │   └── ai/                      Two-Pass LLM client
 │   └── Dockerfile
 │
-├── docs/                            Architecture explanations and Roadmap plannings
+├── docs/                            Architecture explanations only
+│   └── explanations/                Backend, frontend, worker and infrastructure explanations
 ├── infras/                          Runtime infra configs for Nginx and Prometheus
 │   ├── nginx.conf                   Local Reverse Proxy Gateway config
 │   └── prometheus.yml               Prometheus scrape config for app and infra metrics
@@ -285,11 +295,10 @@ Detailed design documents are maintained under `docs/`:
 
 | Document | Purpose |
 |---|---|
-| [**`planning.md`**](file:///d:/voice-sentiment/docs/plannings/planning.md) | Roadmap, current milestones, achievements, and future staging plans |
 | [**`backend-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/backend-explanation.md) | FastAPI Gateway controllers, JWT security, and Alembic DB schema |
 | [**`frontend-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/frontend-explanation.md) | React UI, feature-based frontend modules, DTO/state layers, CSS variables, and dynamic chart styling |
 | [**`worker-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/worker-explanation.md) | Whisper ASR, Silero VAD, WeSpeaker ONNX Diarization & Two-Pass LLM workflows |
-| [**`infrastructure-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/infrastructure-explanation.md) | Centralized Master `.env` config, multi-queueing and hidden container firewalls |
+| [**`infrastructure-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/infrastructure-explanation.md) | Centralized Master `.env`, Nginx/Prometheus observability, multi-queueing and hidden container firewalls |
 
 ---
 
@@ -302,7 +311,7 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 | **Nginx (App Gateway)** | `9090` | — | Create/Register in Web UI |
 | **Adminer** | `9091` | `voice` | `voice` (Server: `postgres`) |
 | **MinIO Console** | `9092` | `minioadmin` | `minioadmin` |
-| **RedisInsight** | `9093` | — | — (Conenct to `redis`) |
+| **RedisInsight** | `9093` | — | — (connect to `redis`) |
 | **RabbitMQ Management** | `9094` | `guest` | `guest` |
 | **Prometheus API** | `9090/observability/api` | — | Query via Nginx, e.g. `/observability/api/v1/query?query=up` |
 | **PostgreSQL DB** | `5432` | `voice` | `voice` (DB: `voice_sentiment`) |
@@ -312,6 +321,8 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 ## Architecture Accuracy Notes
 
 - **Production-ready Port Firewalls**: Containers for `backend` and `frontend` have no exposed ports on the host. Every web package must route through Nginx proxy (`9090`) to access app assets, preventing bypass attacks.
+- **Prometheus API Routing**: Frontend admin metrics query Prometheus through Nginx at `/observability/api/*`; backend does not own or proxy this metrics query endpoint.
+- **Observability Security Note**: `/observability/api/*` is not protected by app-level auth in Nginx. Keep it local/dev, or add Nginx basic auth, IP allowlist, VPN, or `auth_request` before production exposure.
 - **Stateless/Stateful Segregation**: `voice-worker` holds zero database connections or state adapters, caching Whisper ASR and WeSpeaker ONNX models completely in-memory to scale rapidly.
 - **Tenant Isolation**: Data boundaries (S3 files, Redis caches, Postgres tables) are strictly separated by the UUID `owner_id` context.
-- **Centralized Master `.env`**: Build artifacts are stateless and decoupled from environment configs. Simply create one `.env` file at the root of the server, pull immutable images from Docker Hub, and boot with `docker compose up -d`!
+- **Centralized Master `.env`**: Build artifacts are stateless and decoupled from environment configs. Keep only root `.env` and `.env.example`; service-level `.env*` files are intentionally not used.

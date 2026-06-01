@@ -8,14 +8,14 @@ Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập t
 
 ## Danh Sách Các Cổng Dịch Vụ Trên Host (Unified Port Mapping)
 
-Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, toàn bộ các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào API đều được quy hoạch đồng bộ vào dải cổng liên tục từ **`9090` đến `9095`**; Prometheus API được expose qua chính Nginx tại `/observability/api`:
+Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào web chính được quy hoạch quanh dải **`9090` đến `9095`**; Prometheus API không mở thêm host port riêng mà được expose qua chính Nginx tại `/observability/api`:
 
 | Dịch vụ Container | Cổng Host | Cổng Container | Phạm vi / Mục đích |
 |:---|:---:|:---:|:---|
 | **Nginx Proxy** | **`9090`** | `80` | **Ngõ vào duy nhất** cho giao diện Frontend UI và API Backend |
 | **Adminer** | **`9091`** | `8080` | Trình quản trị cơ sở dữ liệu PostgreSQL trực quan trên Web |
 | **MinIO Console** | **`9092`** | `9001` | Trang quản trị giao diện (Console) bộ lưu trữ đối tượng S3 |
-| **RedisInsight** | **`9093`** | `8001` | Giao diện giám sát bộ nhớ đệm nhanh Redis |
+| **RedisInsight** | **`9093`** | `5540` | Giao diện giám sát bộ nhớ đệm nhanh Redis |
 | **RabbitMQ Admin** | **`9094`** | `15672` | Trang quản trị hàng đợi công việc (RabbitMQ Management) |
 | **`voice-worker` API** | **`9095`** | `8000` | FastAPI Web Server cung cấp API giải mã ASR/STT độc lập |
 | **Prometheus API** | **`9090/observability/api`** | `9090` | API query metrics do Nginx proxy trực tiếp sang Prometheus, không đi qua backend |
@@ -68,7 +68,7 @@ Hệ thống nâng cấp từ 1 hàng đợi đơn lẻ lên mô hình **Đa hà
 
 ## Cấu Hình Tập Trung Master `.env` (Chuẩn 12-Factor App)
 
-Toàn bộ hệ thống microservices được cấu hình thông qua **duy nhất một tệp tin [`.env`](file:///d:/voice-sentiment/.env) đặt ở thư mục gốc của dự án**. 
+Toàn bộ hệ thống microservices được cấu hình thông qua **duy nhất một tệp tin [`.env`](file:///d:/voice-sentiment/.env) đặt ở thư mục gốc của dự án**. File mẫu duy nhất là root `.env.example`; các `.env`/`.env.example` cục bộ trong `backend/`, `frontend/`, `llm-worker/`, `voice-worker/` đã được dọn bỏ để tránh cấu hình phân mảnh.
 
 ### Cách hoạt động:
 1. Khi thực thi lệnh `docker compose up`, Docker Compose sẽ đọc tệp `.env` ở root này để tự động điền các biến cấu hình (như `${POSTGRES_DB}`, `${MINIO_ROOT_USER}`) vào tệp `docker-compose.yml` (Interpolation).
@@ -116,7 +116,7 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 
 ## Observability với Prometheus
 
-- Cấu hình hạ tầng runtime được gom vào `infras/`: `infras/nginx.conf` cho reverse proxy và `infras/prometheus.yml` cho scrape jobs.
+- Cấu hình hạ tầng runtime được gom vào `infras/`: `infras/nginx.conf` cho reverse proxy và `infras/prometheus.yml` cho scrape jobs. Root `nginx.conf` đã được dọn bỏ; Docker Compose mount trực tiếp `./infras/nginx.conf`.
 - Prometheus chủ động scrape metrics từ `backend:8000/metrics`, `voice-worker:8000/metrics`, `llm-worker:9100/metrics` và các exporter Postgres/Redis/RabbitMQ/Nginx.
 - Frontend Admin không gọi backend để lấy metrics. Dashboard `/admin/observability` gọi Prometheus HTTP API qua Nginx tại `/observability/api/v1/query`.
 - Lưu ý bảo mật: route `/observability/api/*` hiện chưa có lớp auth riêng ở Nginx; chỉ nên dùng local/dev hoặc đặt sau VPN/IP allowlist/basic auth khi production.
