@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -22,7 +22,7 @@ class UserRoleModel(Base):
     __tablename__ = "user_role"
 
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False
     )
     role_id: Mapped[str] = mapped_column(
         ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True, nullable=False
@@ -34,7 +34,7 @@ class UserRoleModel(Base):
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     username: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(256), nullable=False)
@@ -63,7 +63,7 @@ class UserModel(Base):
 class AnalysisJobModel(Base):
     __tablename__ = "analysis_jobs"
 
-    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str | None] = mapped_column(String(256))
     input_type: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
@@ -72,7 +72,7 @@ class AnalysisJobModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    owner_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
     result: Mapped["AnalysisResultModel | None"] = relationship(back_populates="job", cascade="all, delete-orphan")
     owner: Mapped[UserModel | None] = relationship()
@@ -81,8 +81,8 @@ class AnalysisJobModel(Base):
 class AnalysisResultModel(Base):
     __tablename__ = "analysis_results"
 
-    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    job_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("analysis_jobs.id"), unique=True, nullable=False)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    job_id: Mapped[str] = mapped_column(String(36), ForeignKey("analysis_jobs.id"), unique=True, nullable=False)
     transcript_json: Mapped[list] = mapped_column(JSONB, nullable=False)
     summary_json: Mapped[list] = mapped_column(JSONB, nullable=False)
     sentiment: Mapped[str] = mapped_column(String(32), nullable=False)
