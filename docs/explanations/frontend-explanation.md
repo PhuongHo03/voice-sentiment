@@ -14,61 +14,83 @@ Frontend cung cấp các chức năng:
 
 ## Cấu trúc thư mục
 
-Để đạt hiệu quả tối đa về khả năng mở rộng và bảo trì, dự án áp dụng mô hình phân tách vai trò:
+Để đạt hiệu quả tối đa về khả năng mở rộng và bảo trì, dự án áp dụng mô hình phân tách theo tính năng (feature-based):
 
 ```text
 frontend/
-├── src/app/App.tsx                     ← Khung xương bọc ngoài ứng dụng (App routing & Protected routes)
-├── src/context/AuthContext.tsx         ← Quản lý phiên đăng nhập và đính kèm JWT token vào các API requests
-├── src/pages/                          ← Các trang hiển thị chính (Pure Presentation Components)
-│   ├── DashboardPage.tsx               ← Dashboard phân tích cảm xúc & thống kê của cá nhân
-│   ├── AdminDashboardPage.tsx          ← Dashboard quản lý tiến độ nhân viên & duyệt tài khoản của Admin
-│   ├── LoginPage.tsx                   ← Trang Đăng nhập tối giản trực quan
-│   └── RegisterPage.tsx                ← Trang Đăng ký tài khoản mới
-├── src/hooks/                          ← Nơi đóng gói toàn bộ logic nghiệp vụ (Custom Hooks)
-│   ├── useAnalysis.ts                  ← Hook điều khiển luồng phân tích, polling và thống kê cá nhân
-│   ├── useAdminDashboard.ts            ← Hook quản trị của Admin (đồng bộ URL, kích hoạt tài khoản, đổi vai trò)
-│   ├── useLogin.ts                     ← Hook quản lý biểu mẫu đăng nhập và validation
-│   ├── useRegister.ts                  ← Hook quản lý validation và đăng ký tài khoản
-│   └── useAudioRecorder.ts             ← Hook quản lý luồng ghi âm từ microphone thông qua MediaRecorder
-├── src/components/                     ← Các thành phần UI nhỏ dùng chung
-│   ├── audio/AudioInputPanel.tsx       ← Panel xử lý kéo thả file ghi âm và nhập văn bản
-│   ├── transcript/TranscriptLog.tsx    ← Nhật ký hội thoại chia luồng vai nói sinh động
-│   ├── summary/SummaryCard.tsx         ← Thẻ tóm tắt các ý chính cuộc gọi
-│   └── sentiment/SentimentBadge.tsx    ← Huy hiệu trạng thái cảm xúc động
-├── src/services/analysisApi.ts         ← Trình gọi API kết nối trực tiếp đến API Gateway
-├── src/styles/main.css                 ← Design system, CSS Variables (Teal/Rose/Blue/Violet), Glassmorphism
-└── src/types/                          ← Định nghĩa kiểu dữ liệu tĩnh nghiêm ngặt
-    ├── analysis.ts                     ← Kiểu dữ liệu phiên phân tích (JobStatus, SessionListItem...)
-    └── admin.ts                        ← Kiểu dữ liệu quản trị (Employee, EmployeeStats, AccountUser)
+├── src/app/App.tsx                                      ← Khung xương bọc ngoài ứng dụng (App routing & Protected routes)
+├── src/features/auth/                                   ← Phân hệ đăng nhập, đăng ký và phiên người dùng
+│   ├── screens/LoginPage.tsx                            ← Trang Đăng nhập tối giản trực quan
+│   ├── screens/RegisterPage.tsx                         ← Trang Đăng ký tài khoản mới
+│   ├── hooks/useLogin.ts                                ← Hook quản lý biểu mẫu đăng nhập và validation
+│   ├── hooks/useRegister.ts                             ← Hook quản lý validation và đăng ký tài khoản
+│   ├── api/authApi.ts                                   ← Hàm gọi API đăng nhập, đăng ký và lấy hồ sơ hiện tại
+│   ├── dtos/authDto.ts                                  ← Builder request payload và parser response/error auth
+│   ├── states/AuthContext.tsx                           ← Quản lý phiên đăng nhập và token JWT
+│   ├── types/auth.ts                                    ← Kiểu dữ liệu auth (User, Role, AuthContextType)
+│   └── components/                                      ← UI trình bày chung của màn hình auth
+├── src/features/analysis/                               ← Phân hệ phân tích cuộc gọi cá nhân
+│   ├── screens/DashboardPage.tsx                        ← Dashboard phân tích cảm xúc & thống kê của cá nhân
+│   ├── hooks/useAnalysis.ts                             ← Hook điều khiển luồng phân tích, polling và thống kê cá nhân
+│   ├── hooks/useAudioRecorder.ts                        ← Hook quản lý luồng ghi âm microphone qua MediaRecorder
+│   ├── api/analysisApi.ts                               ← Trình gọi API kết nối trực tiếp đến API Gateway
+│   ├── dtos/analysisDto.ts                              ← Builder request payload và parser response phân tích/file
+│   ├── states/analysisState.ts                          ← Type/view/storage helpers cho session/dashboard/files
+│   ├── types/analysis.ts                                ← Kiểu dữ liệu phiên phân tích (JobStatus, SessionListItem...)
+│   └── components/                                      ← UI chỉ dùng trong phân hệ phân tích
+│       ├── audio/AudioInputPanel.tsx                    ← Panel kéo thả file ghi âm và nhập văn bản
+│       ├── transcript/TranscriptLog.tsx                 ← Nhật ký hội thoại chia luồng vai nói sinh động
+│       ├── summary/SummaryCard.tsx                      ← Thẻ tóm tắt các ý chính cuộc gọi
+│       └── sentiment/SentimentBadge.tsx                 ← Huy hiệu trạng thái cảm xúc động
+├── src/features/admin/                                  ← Phân hệ quản trị tiến độ nhân viên và duyệt tài khoản
+│   ├── screens/AdminDashboardPage.tsx                   ← Dashboard quản lý tiến độ nhân viên & duyệt tài khoản
+│   ├── hooks/useAdminDashboard.ts                       ← Hook quản trị (đồng bộ URL, kích hoạt tài khoản, đổi vai trò)
+│   ├── api/adminApi.ts                                  ← Hàm gọi API nhân viên, tài khoản và phân quyền admin
+│   ├── api/prometheusApi.ts                             ← Hàm query Prometheus API qua Nginx `/observability/api`
+│   ├── hooks/useObservabilityMetrics.ts                 ← Hook tải metrics hệ thống, trạng thái target và auto-refresh
+│   ├── dtos/adminDto.ts                                 ← Builder request payload và parser response admin
+│   ├── states/adminState.ts                             ← Type/tab/toast và helper đồng bộ URL state của Admin
+│   ├── types/admin.ts                                   ← Kiểu dữ liệu quản trị (Employee, EmployeeStats, AccountUser)
+│   ├── types/metrics.ts                                 ← Kiểu dữ liệu metrics từ Prometheus cho admin dashboard
+│   └── components/                                      ← UI trình bày riêng của Admin
+│       ├── AdminToast.tsx                               ← Toast thông báo trạng thái thao tác admin
+│       ├── AdminHeader.tsx                              ← Header và nút chuyển/đăng xuất admin
+│       ├── AdminTabs.tsx                                ← Điều hướng tab tiến độ/tài khoản/metrics hệ thống
+│       ├── AdminPerformanceDashboard.tsx                ← Dashboard tiến độ nhân viên
+│       ├── AdminObservabilityDashboard.tsx              ← Dashboard Prometheus metrics cho admin
+│       └── AdminAccountManagement.tsx                   ← Bảng quản lý tài khoản hệ thống
+└── src/styles/main.css                                  ← Design system, CSS Variables, Glassmorphism
 ```
 
 ---
 
-## Kiến Trúc Tách Biệt Logic Nghiệp Vụ (Custom Hooks Separation)
+## Kiến Trúc Tách Biệt Theo Tính Năng (Feature-Based Separation)
 
-Đây là điểm cải tiến quan trọng giúp mã nguồn frontend cực kỳ sạch sẽ và dễ bảo trì. Thay vì viết các biến trạng thái `useState`, hiệu ứng phụ `useEffect` hay các hàm xử lý sự kiện (event handlers) bên trong các tệp UI Pages, tất cả logic đã được tách biệt hoàn toàn vào thư mục `src/hooks/`.
+Mỗi phân hệ sở hữu màn hình, hook, API/state, component và kiểu dữ liệu của riêng nó. Luồng mặc định là `App.tsx → feature screen → feature hook → feature api/state/types → feature components`. Root-level chỉ giữ entrypoint, app shell và style dùng chung.
 
-### 1. Phân hệ Phân tích Cá nhân (`DashboardPage` & `useDashboardAnalysis`)
-* **Tệp hiển thị**: `DashboardPage.tsx` chỉ còn khoảng 850 dòng (chủ yếu là cấu trúc HTML/CSS hiển thị giao diện, donut chart, scorecard). Trang này chỉ gọi và giải cấu trúc các thuộc tính trả về từ Hook:
-  ```typescript
-  const { sessions, activeSessionId, handleAudioSubmit, handleTextSubmit, ... } = useDashboardAnalysis(isAdmin);
-  ```
-* **Tệp Custom Hook**: `useAnalysis.ts` quản lý:
+### 1. Phân hệ Phân tích Cá nhân (`features/analysis`)
+* **Tệp hiển thị**: `screens/DashboardPage.tsx` chỉ lắp ghép giao diện dashboard, sidebar lịch sử, file manager, chart và scorecard.
+* **Tệp Custom Hook**: `hooks/useAnalysis.ts` quản lý:
   * Tải danh sách lịch sử phiên phân tích khi khởi chạy.
   * Lắng nghe trạng thái và thực hiện cơ chế Polling (truy vấn lặp mỗi 2 giây) nếu phát hiện có phiên đang xử lý (`pending`/`processing`).
   * Thực thi các hàm đổi tên, xóa phiên, tải lên file ghi âm và nạp dữ liệu thống kê cá nhân.
+* **API/DTO/State/Types/Components**: `api/analysisApi.ts`, `dtos/analysisDto.ts`, `states/analysisState.ts`, `types/analysis.ts` và `components/*` nằm cùng phân hệ để tránh rải business logic phân tích ra root.
 
-### 2. Phân hệ Quản trị Admin (`AdminDashboardPage` & `useAdminDashboard`)
-* **Tệp hiển thị**: `AdminDashboardPage.tsx` giảm mạnh từ gần 800 dòng xuống chỉ còn 440 dòng.
-* **Tệp Custom Hook**: `useAdminDashboard.ts` đảm nhận toàn bộ các logic phức tạp:
+### 2. Phân hệ Quản trị Admin (`features/admin`)
+* **Tệp hiển thị**: `screens/AdminDashboardPage.tsx` giữ `useAdminDashboard`, tính toán KPI/donut và lắp ghép các component trình bày trong `components/`.
+* **Tệp Custom Hook**: `hooks/useAdminDashboard.ts` đảm nhận toàn bộ các logic phức tạp:
   * Theo dõi sự kiện thay đổi lịch sử duyệt trình duyệt (`popstate`) để đồng bộ tab và lựa chọn nhân viên với thanh URL của trình duyệt (giúp lưu trạng thái khi nhấn Back/Forward).
-  * Gọi API lấy danh sách nhân viên (`/api/admin/employees`) và toàn bộ tài khoản (`/api/admin/users`).
-  * Gửi lệnh duyệt kích hoạt hoặc đổi quyền hạn tài khoản và kích hoạt Toast thông báo động.
+  * Gọi `api/adminApi.ts` để lấy danh sách nhân viên (`/api/admin/employees`) và toàn bộ tài khoản (`/api/admin/users`).
+  * Dùng `dtos/adminDto.ts` để build payload cập nhật trạng thái/vai trò và parse response trước khi đưa dữ liệu về hook.
+  * Dùng `states/adminState.ts` cho type tab/toast và helper tính toán đường dẫn URL theo trạng thái Admin.
+  * Gửi lệnh duyệt kích hoạt hoặc đổi quyền hạn tài khoản thông qua API module và kích hoạt Toast thông báo động.
+* **Components**: `AdminToast`, `AdminHeader`, `AdminTabs`, `AdminPerformanceDashboard`, `AdminObservabilityDashboard`, `AdminAccountManagement` chỉ nhận props từ screen và render giao diện Admin; logic nghiệp vụ vẫn nằm trong hook.
+* **Observability tab**: đường dẫn `/admin/observability` hiển thị metrics từ Prometheus. Frontend gọi Prometheus API qua Nginx (`/observability/api/v1/query`), không gọi backend để lấy metrics. `VITE_PROMETHEUS_BASE_URL` mặc định là `/observability/api` trong Docker/Nginx.
 
-### 3. Phân hệ Đăng nhập/Đăng ký
+### 3. Phân hệ Đăng nhập/Đăng ký (`features/auth`)
 * **LoginPage** và **RegisterPage** chỉ xử lý hiển thị form và gán sự kiện.
-* Toàn bộ việc kiểm tra regex định dạng email, so khớp mật khẩu xác nhận, quản lý trạng thái nút bấm `isSubmitting` và thông báo lỗi được đóng gói an toàn trong `useLogin.ts` và `useRegister.ts`.
+* Toàn bộ việc kiểm tra regex định dạng email, so khớp mật khẩu xác nhận, quản lý trạng thái nút bấm `isSubmitting` và thông báo lỗi được đóng gói an toàn trong `hooks/useLogin.ts` và `hooks/useRegister.ts`.
+* `api/authApi.ts` đóng gói các request đăng nhập, đăng ký và lấy hồ sơ hiện tại; `dtos/authDto.ts` build payload và parse response/error; `types/auth.ts` giữ contract TypeScript; `states/AuthContext.tsx` là state trung tâm cho phiên đăng nhập, token JWT và thông tin vai trò người dùng.
 
 ---
 
@@ -92,5 +114,6 @@ Giao diện áp dụng các tiêu chuẩn thiết kế cao cấp nhất hiện n
 
 ## Cấu Hình Mạng & Cổng Giao Tiếp (Network Configuration)
 
-* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
+* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` và `VITE_PROMETHEUS_BASE_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
 * **Bảo mật và CORS**: Cổng hoạt động Vite (`5173`) được bảo vệ hoàn toàn bên trong mạng nội bộ Docker. Reverse Proxy Nginx chạy ở cổng `9090` trên host đảm nhiệm việc tiếp nhận mọi yêu cầu tĩnh từ trình duyệt người dùng, tự động giải quyết triệt để lỗi chia sẻ tài nguyên nguồn gốc chéo (CORS) mà không cần cấu hình lỏng lẻo ở tầng API.
+* **Prometheus API**: Admin metrics dashboard dùng `/observability/api` do Nginx proxy sang Prometheus. Backend không gánh endpoint metrics cho frontend.

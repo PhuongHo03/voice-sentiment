@@ -1,5 +1,5 @@
 import pytest
-from app.application.use_cases.auth_service import AuthService
+from app.services.auth_service import AuthService
 from datetime import timedelta
 
 def test_password_hashing():

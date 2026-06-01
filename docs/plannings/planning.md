@@ -13,13 +13,15 @@
 ```text
 ├── voice-worker/         ← Dịch vụ ASR giải mã âm thanh stateless (FastAPI + local CPU Whisper)
 ├── llm-worker/           ← Dịch vụ điều phối xử lý nền (RabbitMQ consumer + LLM client)
-├── backend/              ← FastAPI Gateway công khai, quản lý trạng thái metadata và migrations DB
-├── frontend/             ← Giao diện Admin Dashboard React/Vite/TypeScript trực quan
+├── backend/              ← FastAPI Gateway công khai, cấu trúc layered controllers/services/repositories, quản lý metadata và migrations DB
+├── frontend/             ← Giao diện React/Vite/TypeScript; Admin screen lắp ghép components trình bày riêng
 ├── docs/                 ← Thư mục tài liệu hướng dẫn và phân tích kiến trúc dự án
 │   ├── explanations/     ← Tài liệu chi tiết của từng thành phần (backend, frontend, worker, infra)
 │   └── plannings/        ← Tài liệu lộ trình và quy hoạch phát triển hệ thống
-├── docker-compose.yml    ← Khai báo toàn bộ hạ tầng microservices (Postgres, Redis, RabbitMQ, MinIO, Nginx...)
-└── nginx.conf            ← File cấu hình Reverse Proxy Nginx cục bộ trỏ cổng host 9090
+├── infras/               ← Cấu hình hạ tầng runtime: Nginx reverse proxy và Prometheus scrape jobs
+│   ├── nginx.conf        ← Reverse proxy cho frontend/backend và Prometheus API `/observability/api`
+│   └── prometheus.yml    ← Scrape config cho app metrics và infra exporters
+└── docker-compose.yml    ← Khai báo toàn bộ hạ tầng microservices (Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus...)
 ```
 
 ---
@@ -30,7 +32,7 @@
 *   **MinIO (`9000`, Console `9092`)**: Lưu trữ tệp tin đối tượng cho các file âm thanh ghi âm gốc.
 *   **Redis (`6379`, Insight `9093`)**: Lưu trữ bộ nhớ đệm cache trạng thái công việc để phản hồi UI siêu tốc.
 *   **RabbitMQ (`5672`, Console `9094`)**: Bộ trung chuyển hàng đợi tin nhắn không đồng bộ `analysis.jobs`.
-*   **Nginx Proxy (`9090`)**: Cổng ngõ vào (Gateway) duy nhất của hệ thống phục vụ Web UI và định tuyến các API backend.
+*   **Nginx Proxy (`9090`)**: Cổng ngõ vào (Gateway) duy nhất của hệ thống phục vụ Web UI, API backend và Prometheus API qua `/observability/api`.
 *   **Adminer (`9091`)**: Công cụ Web UI gọn nhẹ quản trị cơ sở dữ liệu PostgreSQL.
 *   **local Whisper (Cổng `9095` nội bộ `8000`)**: Máy chủ `voice-worker` chạy `faster-whisper` giải mã ASR trực tiếp trên CPU bằng lượng tử hóa `int8` cực kỳ tối ưu RAM.
 *   **Remote LLM (External)**: Đầu cuối mô hình LLM tương thích OpenAI chạy tại địa chỉ IP máy chủ của bạn (`192.168.2.74:8007`) đảm nhận phân tích sắc thái và đánh giá nhân viên.
@@ -39,7 +41,7 @@
 
 ## Danh Sách Công Việc Đã Hoàn Thành (Achievements)
 
-- [x] **Giai đoạn 1**: Xây dựng cấu trúc Clean Architecture cơ bản và kết nối bộ khung Docker Compose thô.
+- [x] **Giai đoạn 1**: Xây dựng cấu trúc Layered Architecture cơ bản và kết nối bộ khung Docker Compose thô.
 - [x] **Giai đoạn 2**: Tích hợp mô hình cục bộ `faster-whisper` trên CPU, đấu nối LLM thực tế, loại bỏ hoàn toàn 100% Mock Fallback và cấu hình migrations DB tự động bằng Alembic.
 - [x] **Giai đoạn 2.5/3**:
   - [x] Phân tách thành công nền tảng xử lý từ một background worker cồng kềnh thành bộ đôi độc lập: `voice-worker` (Stateless ASR) và `llm-worker` (Stateful Orchestrator).
@@ -54,20 +56,22 @@
   - [x] **API Thống Kê**: Thêm endpoint `GET /api/analysis/stats` trả về dữ liệu tổng hợp gồm số lượng phân tích, phân phối sentiment, điểm nhân viên trung bình, và xu hướng 7 ngày gần nhất.
   - [x] **UX Cải Tiến**: Đổi biểu tượng "Phân tích cuộc gọi" thành icon SVG phù hợp hơn; sửa lỗi CSS khung bao quanh nhỏ khi chọn item trong sidebar.
   - [x] **Chẩn đoán Lỗi STT Timeout**: Xác định và hướng dẫn xử lý lỗi `Voice-worker STT service connection failed: timed out` when voice-worker chưa sẵn sàng hoặc quá tải.
+- [x] **Admin Components Refactor**: Tách `AdminDashboardPage.tsx` thành các component trình bày `AdminToast`, `AdminHeader`, `AdminTabs`, `AdminPerformanceDashboard`, `AdminAccountManagement`; giữ `useAdminDashboard` trong screen.
 - [x] **Giai đoạn 7**:
   - [x] **Unit Tests**: Xây dựng bộ unit tests bằng `pytest` phủ kín các logic lõi cho `backend` (đạt 91%-100% các file Use Cases & AuthService), `voice-worker`, và `llm-worker` sử dụng mock cô lập.
   - [x] **Resilience Integration**: Viết script `verify_resilience.py` giả lập sập hạ tầng Postgres, Redis, RabbitMQ. Chứng minh hệ thống tự khôi phục kết nối và không bị crash đơ máy chủ.
   - [x] **Load Testing**: Thiết lập script kiểm thử bất đồng bộ song song `load_test_whisper.py` gửi đồng thời nhiều request để chứng thực năng lực phản hồi (8 rps, latency trung bình 0.06s).
-  - [x] **Tối ưu hóa Frontend (Custom Hooks Separation)**: Tách triệt để toàn bộ logic nghiệp vụ (API, state, effects) ra khỏi các tệp Pages (`DashboardPage`, `AdminDashboardPage`, `LoginPage`, `RegisterPage`) vào các Custom Hooks độc lập có kiểu dữ liệu mạnh mẽ, giúp tối giản từ 30% - 45% mã nguồn Pages, biên dịch thành công 100% không lỗi.
+  - [x] **Tối ưu hóa Frontend (Feature-Based + Custom Hooks Separation)**: Tách frontend thành các phân hệ `auth`, `analysis`, `admin`; mỗi phân hệ sở hữu màn hình, hooks, API/state, DTOs, components và types liên quan. Các lời gọi backend nằm trong module `api/*Api.ts`, request/response shaping nằm trong `dtos/*Dto.ts`, state/url helpers nằm trong `states/*State.ts`, còn logic nghiệp vụ/UI orchestration nằm trong Custom Hooks độc lập có kiểu dữ liệu mạnh mẽ.
   - [x] **Cấu hình biến môi trường tập trung (Master `.env` ở Root)**: Hợp nhất toàn bộ các tệp `.env` phân mảnh của các services thành 1 tệp `.env` duy nhất ở ngoài root của dự án. Đồng bộ hóa với `docker-compose.yml` theo chuẩn thiết kế 12-Factor App để sẵn sàng cho đóng gói Production và đăng tải Docker Hub.
   - [x] **Hệ thống Caching & Invalidation nâng cao (Advanced Caching)**: Thiết lập bộ nhớ đệm cho Dashboard Stats (TTL 24h), tự động xóa cache thông minh khi kết thúc Job (ở `llm-worker`) hoặc khi xóa phiên (ở `backend`). Đồng thời ghi đè cache `pending` khi tạo Job giúp giảm tải PostgreSQL Polling về mức tuyệt đối **0%**.
+  - [x] **Tái cấu trúc Backend Layered**: Chuyển `backend/app` sang cấu trúc `controllers`, `dtos`, `services`, `repositories`, `models`, `middlewares`, `configs`; controllers mỏng, nghiệp vụ nằm trong services, truy vấn SQLAlchemy nằm trong repositories.
 
 ---
 
 ## Lộ Trình Chi Tiết Các Giai Đoạn
 
 ### Giai đoạn 1 — MVP Scaffold (Hoàn thành)
-Thiết lập bộ khung Clean Architecture thô, cấu hình Docker Compose ban đầu, tạo giao diện thô cho phép ghi âm và hiển thị kết quả.
+Thiết lập bộ khung Layered Architecture thô, cấu hình Docker Compose ban đầu, tạo giao diện thô cho phép ghi âm và hiển thị kết quả.
 
 ### Giai đoạn 2 — Tích Hợp ASR/LLM Thực Tế & Loại Bỏ Mock (Hoàn thành)
 Thay thế Riva bằng `faster-whisper` trên CPU cục bộ, chuẩn hóa âm thanh đầu vào WebM từ microphone bằng FFmpeg pipe, đấu nối OpenAI-compatible API bên ngoài, đồng bộ hóa database PostgreSQL tự động qua Alembic khi khởi tạo container, loại bỏ hoàn toàn dữ liệu giả lập.
@@ -117,7 +121,7 @@ Thay thế Riva bằng `faster-whisper` trên CPU cục bộ, chuẩn hóa âm t
 *   **Unit Tests**: Viết kiểm thử thành phần cho các Repositories, Use Cases, và AI Clients của cả `backend`, `voice-worker`, và `llm-worker` đạt độ phủ cao.
 *   **Integration Tests**: Giả lập các luồng gửi tin nhắn RabbitMQ bị ngắt quãng, mất kết nối cơ sở dữ liệu PostgreSQL/Redis để củng cố độ bền bỉ (resilience) của các dịch vụ thông qua script tự động `verify_resilience.py`.
 *   **Load Testing**: Đo lường và đánh giá năng lực chịu tải mạng đồng thời của `voice-worker` thông qua script bất đồng bộ song song `load_test_whisper.py` đạt tỷ lệ thành công 100%.
-*   **Tái cấu trúc Frontend (Tách Custom Hooks)**: Phân tách hoàn chỉnh mã nguồn hiển thị khỏi logic nghiệp vụ của các trang `DashboardPage`, `AdminDashboardPage`, `LoginPage` và `RegisterPage` thành các hooks chuyên biệt có kiểu dữ liệu mạnh (`useDashboardAnalysis`, `useAdminDashboard`, `useLogin`, `useRegister`), giúp frontend đạt cấu trúc mô hình hóa chuẩn tắc của React, dễ dàng nâng cấp giao diện mà không ảnh hưởng logic bên dưới.
+*   **Tái cấu trúc Frontend (Feature-Based + Custom Hooks)**: Tổ chức frontend theo các phân hệ `auth`, `analysis`, `admin`; mỗi phân hệ sở hữu `screens`, `hooks`, `api`/`states`, `dtos`, `components` và `types` liên quan. Backend requests được gom vào `api/*Api.ts`, request/response shaping được đặt trong `dtos/*Dto.ts`, state/url helpers được đặt trong `states/*State.ts`; mã nguồn hiển thị vẫn tách khỏi logic nghiệp vụ qua các hooks chuyên biệt (`useDashboardAnalysis`, `useAdminDashboard`, `useLogin`, `useRegister`). Riêng Admin screen giữ hook/orchestration trong `AdminDashboardPage.tsx` và lắp ghép các component trình bày `AdminToast`, `AdminHeader`, `AdminTabs`, `AdminPerformanceDashboard`, `AdminAccountManagement` để dễ nâng cấp giao diện mà không ảnh hưởng logic bên dưới.
 *   **Hệ thống cấu hình tập trung (Master `.env`)**: Thiết lập và tích hợp tệp `.env` duy nhất ở ngoài root của dự án để quản lý tập trung toàn bộ biến môi trường của các dịch vụ microservices (`backend`, `frontend`, `voice-worker`, `llm-worker`), đồng bộ hóa cùng `docker-compose.yml` theo chuẩn **12-Factor App**. Đảm bảo các Docker Images hoàn toàn không chứa bất kỳ mã nhạy cảm nào (Immutable Images), tăng tốc quy mô triển khai Production và đưa lên Docker Hub.
 *   **Tối ưu hóa Caching & Invalidation (Advanced Caching)**:
     *   **Dashboard Stats Caching**: Nhất quán lưu cache dữ liệu thống kê biểu đồ tròn và cột của Dashboard trong Redis với thời gian sống 24h, tự động thu hồi (evict) thông minh khi `llm-worker` hoàn thành phân tích một job hoặc khi backend xóa một phiên, giúp tránh các câu lệnh SQL `COUNT/AVG` đắt đỏ trong cơ sở dữ liệu PostgreSQL.

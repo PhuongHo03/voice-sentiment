@@ -15,6 +15,7 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Multi--Queue-orange?style=for-the-badge)
 ![MinIO](https://img.shields.io/badge/MinIO-S3_Storage-red?style=for-the-badge)
 ![Nginx](https://img.shields.io/badge/Nginx-Proxy-green?style=for-the-badge)
+![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-orange?style=for-the-badge)
 
 [Overview](#overview) · [System Flow](#system-flow) · [Quick Start](#quick-start) · [Pipelines](#application-pipelines) · [Repository Map](#repository-map) · [Docs](#docs-index)
 
@@ -29,10 +30,10 @@ Voice Sentiment is a production-ready call center analytics and quality assuranc
 | Component | Tech Stack | Current State |
 |---|---|---|
 | **Backend API** | FastAPI + SQLAlchemy + Alembic | Implemented: JWT Auth, RBAC roles, tenant data isolation, DB migrations, RabbitMQ job publisher |
-| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: login/register, personal dashboard, admin overview panel, SVG donut & weekly charts, Custom Hooks separation |
+| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, SVG donut & weekly charts |
 | **Voice Worker** | faster-whisper + WeSpeaker ONNX | Implemented: stateless ASR, FFmpeg PCM 16kHz resampling, ResNet34 ONNX diarizer + NumPy K-Means clustering |
 | **LLM Worker** | RabbitMQ + remote LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM role mapping and QA score evaluation |
-| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security |
+| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus observability via Nginx |
 
 ---
 
@@ -43,6 +44,7 @@ flowchart TD
     User[Browser Client] -->|Cổng 9090| Nginx[Nginx Reverse Proxy]
     Nginx -->|Định tuyến static| Frontend[React Web UI]
     Nginx -->|Định tuyến API có JWT| Backend[FastAPI Gateway]
+    Nginx -->|/observability/api| Prometheus[Prometheus API]
 
     Backend -->|Lưu metadata & user| Postgres[(PostgreSQL 16)]
     Backend -->|Lưu file ghi âm uploads/user_id| MinIO[(MinIO S3)]
@@ -62,6 +64,9 @@ flowchart TD
     LLM -->|Pass 2: QA Score & Sentiment| LLM
     LLMWorker -->|Lưu kết quả bền vững| Postgres
     LLMWorker -->|Cập nhật completed cache| Redis
+    Prometheus -->|Scrape /metrics + exporters| Backend
+    Prometheus -->|Scrape /metrics| VoiceWorker
+    Prometheus -->|Scrape embedded :9100/metrics| LLMWorker
 ```
 
 ---
@@ -210,13 +215,14 @@ python -m app.main
 |---|---|---|---|
 | **Nginx Proxy** | `docker-compose.yml` | Nginx reverse proxy routing web requests | `9090` |
 | **Backend Gateway** | `backend/` | FastAPI gateway handling Auth, CRUD, DB, and Storage | Internal `8000` |
-| **Frontend UI** | `frontend/` | React dashboard panel optimized with custom hooks | Internal `5173` |
+| **Frontend UI** | `frontend/` | React dashboard panel organized by feature modules | Internal `5173` |
 | **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | `9095` |
 | **LLM Worker** | `llm-worker/` | Asynchronous RabbitMQ consumer and LLM client | Internal |
 | **Adminer** | `docker-compose.yml` | PostgreSQL DB client UI | `9091` |
 | **MinIO Console** | `docker-compose.yml` | Object storage browser interface | `9002` (Console `9092`) |
 | **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `9093` |
 | **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `9094` |
+| **Prometheus API** | `infras/prometheus.yml` | Metrics query API exposed through Nginx `/observability/api` | `9090/observability/api` |
 
 ---
 
@@ -227,38 +233,47 @@ python -m app.main
 ├── backend/                         FastAPI Gateway Server
 │   ├── alembic/                     Database schema version controller
 │   ├── app/
-│   │   ├── core/                    Base configurations
-│   │   ├── application/             Submit analysis use cases
-│   │   ├── infrastructure/          Postgres repositories, MinIO S3 & RabbitMQ adaptors
-│   │   └── interfaces/              Auth, Analysis & Admin API Controllers
+│   │   ├── configs/                 Settings, DB session, cache, queue and storage configs
+│   │   ├── controllers/             Auth, Analysis, Files, Admin and Health API controllers
+│   │   ├── dtos/                    Pydantic request/response contracts
+│   │   ├── services/                Auth, analysis, file and admin business workflows
+│   │   ├── repositories/            SQLAlchemy data access
+│   │   └── models/                  SQLAlchemy ORM models
 │   └── requirements.txt
 │
 ├── frontend/                        React Dashboard Client Panel
 │   ├── src/
 │   │   ├── app/                     App shell router
-│   │   ├── context/                 AuthContext state manager
-│   │   ├── components/              Audio recording, dialog, summary UI components
-│   │   ├── hooks/                   Separated Custom Hooks: useAnalysis, useAdminDashboard...
-│   │   ├── services/                Vite endpoint fetch API client
-│   │   ├── styles/                  Main CSS design system variables
-│   │   └── types/                   Strict TypeScript static types (analysis, admin)
+│   │   ├── features/
+│   │   │   ├── auth/                Login/register API, DTOs, state, screens, components
+│   │   │   ├── analysis/            Analysis API, DTOs, state helpers, dashboard screen, UI components
+│   │   │   └── admin/               Admin API, DTOs, state helpers, screen and presentational components
+│   │   └── styles/                  Main CSS design system variables
 │   └── package.json
 │
 ├── voice-worker/                    Stateless ASR & ONNX Speaker Diarization Service
 │   ├── app/
-│   │   ├── core/                    Model settings config
-│   │   └── infrastructure/ai/       faster-whisper STT client & WeSpeaker ONNX Diarizer
+│   │   ├── controllers/             Transcription HTTP controller
+│   │   ├── configs/                 Model/settings config
+│   │   ├── services/                Transcription orchestration service
+│   │   └── ai/                      faster-whisper STT client & WeSpeaker ONNX Diarizer
 │   └── Dockerfile
 │
 ├── llm-worker/                      Asynchronous Orchestrator & Two-Pass LLM Analyst
 │   ├── app/
-│   │   ├── application/             AnalyzeJob orchestrator usecase
-│   │   └── infrastructure/          S3 minio, Redis cache, Postgres repo & Two-Pass LLM Client
+│   │   ├── configs/                 Settings for DB, cache, queue, LLM and voice-worker
+│   │   ├── services/                AnalyzeJob orchestration service
+│   │   ├── repositories/            Postgres job/result persistence
+│   │   ├── models/                  SQLAlchemy ORM models
+│   │   ├── ai/                      Two-Pass LLM client
+│   │   └── configs/                 DB session, S3 MinIO, Redis cache and RabbitMQ consumer
 │   └── Dockerfile
 │
 ├── docs/                            Architecture explanations and Roadmap plannings
+├── infras/                          Runtime infra configs for Nginx and Prometheus
+│   ├── nginx.conf                   Local Reverse Proxy Gateway config
+│   └── prometheus.yml               Prometheus scrape config for app and infra metrics
 ├── docker-compose.yml               Production-grade microservices coordinator
-├── nginx.conf                       Local Reverse Proxy Gateway config
 └── .env                             Master centralized environment configuration
 ```
 
@@ -272,7 +287,7 @@ Detailed design documents are maintained under `docs/`:
 |---|---|
 | [**`planning.md`**](file:///d:/voice-sentiment/docs/plannings/planning.md) | Roadmap, current milestones, achievements, and future staging plans |
 | [**`backend-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/backend-explanation.md) | FastAPI Gateway controllers, JWT security, and Alembic DB schema |
-| [**`frontend-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/frontend-explanation.md) | React UI, CSS variables, dynamic chart styling, and Custom Hooks architecture |
+| [**`frontend-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/frontend-explanation.md) | React UI, feature-based frontend modules, DTO/state layers, CSS variables, and dynamic chart styling |
 | [**`worker-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/worker-explanation.md) | Whisper ASR, Silero VAD, WeSpeaker ONNX Diarization & Two-Pass LLM workflows |
 | [**`infrastructure-explanation.md`**](file:///d:/voice-sentiment/docs/explanations/infrastructure-explanation.md) | Centralized Master `.env` config, multi-queueing and hidden container firewalls |
 
@@ -289,6 +304,7 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 | **MinIO Console** | `9092` | `minioadmin` | `minioadmin` |
 | **RedisInsight** | `9093` | — | — (Conenct to `redis`) |
 | **RabbitMQ Management** | `9094` | `guest` | `guest` |
+| **Prometheus API** | `9090/observability/api` | — | Query via Nginx, e.g. `/observability/api/v1/query?query=up` |
 | **PostgreSQL DB** | `5432` | `voice` | `voice` (DB: `voice_sentiment`) |
 
 ---

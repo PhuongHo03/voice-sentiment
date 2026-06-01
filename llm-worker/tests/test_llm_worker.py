@@ -1,11 +1,11 @@
 import pytest
 import json
 from unittest.mock import patch, MagicMock
-from app.infrastructure.queue.rabbitmq_consumer import RabbitMqAnalysisConsumer
+from app.configs.queue import RabbitMqAnalysisConsumer
 
-@patch("app.infrastructure.queue.rabbitmq_consumer.pika.BlockingConnection")
-@patch("app.infrastructure.queue.rabbitmq_consumer.SessionLocal")
-@patch("app.infrastructure.queue.rabbitmq_consumer.AnalyzeJob")
+@patch("app.configs.queue.pika.BlockingConnection")
+@patch("app.configs.queue.SessionLocal")
+@patch("app.configs.queue.AnalyzeJob")
 def test_rabbitmq_consumer_start_and_handling(mock_analyze_job_class, mock_session_local_class, mock_connection_class):
     # Setup mock connections and channels
     mock_channel = MagicMock()
