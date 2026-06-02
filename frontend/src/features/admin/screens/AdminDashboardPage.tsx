@@ -123,10 +123,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
       )}
 
       {/* ════════════════════════════════════════════════════════════
-          TAB 3: OBSERVABILITY
+          TAB 3: METRICS
       ════════════════════════════════════════════════════════════ */}
-      {activeTab === 'observability' && (
-        <AdminObservabilityDashboard active={activeTab === 'observability'} />
+      {activeTab === 'metrics' && (
+        <AdminObservabilityDashboard active={activeTab === 'metrics'} />
       )}
     </div>
   );

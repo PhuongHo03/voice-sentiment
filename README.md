@@ -30,10 +30,10 @@ Voice Sentiment is a production-ready call center analytics and quality assuranc
 | Component | Tech Stack | Current State |
 |---|---|---|
 | **Backend API** | FastAPI + SQLAlchemy + Alembic | Implemented: JWT Auth, RBAC roles, tenant data isolation, DB migrations, RabbitMQ job publisher |
-| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, observability tab, SVG donut & weekly charts |
+| **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, admin metrics dashboard with 9 target health cards and 10 aggregated metrics, SVG donut & weekly charts |
 | **Voice Worker** | faster-whisper + WeSpeaker ONNX | Implemented: stateless ASR, FFmpeg PCM 16kHz resampling, ResNet34 ONNX diarizer + NumPy K-Means clustering |
 | **LLM Worker** | RabbitMQ + remote LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM role mapping and QA score evaluation |
-| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus observability with backend proxy |
+| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus internal-only observability with backend metrics proxy (9 targets including MinIO), Redis 10s cache |
 
 ---
 
@@ -67,6 +67,7 @@ flowchart TD
     Prometheus -->|Scrape /metrics + exporters| Backend
     Prometheus -->|Scrape /metrics| VoiceWorker
     Prometheus -->|Scrape embedded :9100/metrics| LLMWorker
+    Prometheus -->|Scrape /minio/v2/metrics/cluster| MinIO
 ```
 
 ---
@@ -110,7 +111,7 @@ Prometheus operates completely within the internal Docker network. Verify target
 curl "http://localhost:9090/api/admin/metrics"
 ```
 
-Expected: Returns aggregated metrics JSON including `serviceHealth` targets and formatted status cards.
+Expected: Returns aggregated metrics JSON including `serviceHealth` for 9 targets (backend, frontend via nginx, voice-worker, llm-worker, postgres, redis, rabbitmq, nginx, minio) and a single `cards` array with 10 metrics in order: Targets online, Voice jobs, LLM jobs, Request rate, 5xx rate, API P95, MinIO storage used, Postgres size, Redis memory, RabbitMQ messages.
 
 ### 5. Running Tests in Containers
 

@@ -137,7 +137,7 @@ class AdminService:
         if cached:
             return cached
 
-        monitored_jobs = ["backend", "voice-worker", "llm-worker", "postgres", "redis", "rabbitmq", "nginx"]
+        monitored_jobs = ["backend", "frontend", "voice-worker", "llm-worker", "postgres", "redis", "rabbitmq", "nginx", "minio"]
 
         def query_prom(client: httpx.Client, query: str) -> dict:
             try:
@@ -154,21 +154,27 @@ class AdminService:
 
         try:
             with httpx.Client() as client:
-                up_data = query_prom(client, 'up{job=~"backend|voice-worker|llm-worker|postgres|redis|rabbitmq|nginx"}')
+                up_data = query_prom(client, 'up{job=~"backend|voice-worker|llm-worker|postgres|redis|rabbitmq|nginx|minio"}')
                 req_rate_data = query_prom(client, "sum(rate(voice_sentiment_http_requests_total[5m]))")
                 err_rate_data = query_prom(client, 'sum(rate(voice_sentiment_http_requests_total{status=~"5.."}[5m]))')
                 latency_data = query_prom(
                     client,
                     "histogram_quantile(0.95, sum(rate(voice_sentiment_http_request_duration_seconds_bucket[5m])) by (le))"
                 )
-                job_rate_data = query_prom(client, "sum(rate(voice_sentiment_llm_jobs_total[5m]))")
+                llm_job_rate_data = query_prom(client, "sum(rate(voice_sentiment_llm_jobs_total[5m]))")
+                voice_job_rate_data = query_prom(client, "sum(rate(voice_sentiment_voice_transcriptions_total[5m]))")
+                postgres_db_size_data = query_prom(client, "sum(pg_database_size_bytes)")
+                redis_memory_data = query_prom(client, "redis_memory_used_bytes")
+                rabbitmq_messages_data = query_prom(client, "sum(rabbitmq_queue_messages)")
+                minio_usage_data = query_prom(client, "minio_cluster_usage_total_bytes")
 
             # 1. Parse service health
             up_results = up_data.get("data", {}).get("result", [])
             service_health = []
             down_count = 0
             for job in monitored_jobs:
-                item = next((r for r in up_results if r.get("metric", {}).get("job") == job), None)
+                scrape_job = "nginx" if job == "frontend" else job
+                item = next((r for r in up_results if r.get("metric", {}).get("job") == scrape_job), None)
                 is_up = False
                 if item:
                     val = item.get("value", [0, "0"])[1]
@@ -203,7 +209,12 @@ class AdminService:
             req_rate = parse_val(req_rate_data)
             err_rate = parse_val(err_rate_data)
             latency = parse_val(latency_data)
-            job_rate = parse_val(job_rate_data)
+            llm_job_rate = parse_val(llm_job_rate_data)
+            voice_job_rate = parse_val(voice_job_rate_data)
+            postgres_db_size = parse_val(postgres_db_size_data)
+            redis_memory = parse_val(redis_memory_data)
+            rabbitmq_messages = parse_val(rabbitmq_messages_data)
+            minio_usage = parse_val(minio_usage_data)
 
             # 3. Format values
             def format_rate(val: float) -> str:
@@ -213,6 +224,16 @@ class AdminService:
                 if val >= 1.0:
                     return f"{val:.2f}s"
                 return f"{int(round(val * 1000))}ms"
+
+            def format_bytes(val: float) -> str:
+                units = ["B", "KB", "MB", "GB", "TB"]
+                size = val
+                unit = units[0]
+                for unit in units:
+                    if size < 1024 or unit == units[-1]:
+                        break
+                    size /= 1024
+                return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
 
             cards = [
                 {
@@ -224,6 +245,18 @@ class AdminService:
                         if down_count == 0
                         else f"{down_count} target đang down"
                     ),
+                },
+                {
+                    "label": "Voice jobs",
+                    "value": format_rate(voice_job_rate),
+                    "status": "ok",
+                    "detail": "Tốc độ xử lý job voice worker 5 phút gần nhất",
+                },
+                {
+                    "label": "LLM jobs",
+                    "value": format_rate(llm_job_rate),
+                    "status": "ok",
+                    "detail": "Tốc độ xử lý job LLM worker 5 phút gần nhất",
                 },
                 {
                     "label": "Request rate",
@@ -238,22 +271,23 @@ class AdminService:
                     "detail": "Tổng lỗi HTTP 5xx 5 phút gần nhất",
                 },
                 {
-                    "label": "P95 latency",
+                    "label": "API P95",
                     "value": format_seconds(latency),
                     "status": "warn" if latency > 2.0 else "ok",
-                    "detail": "P95 latency từ service HTTP metrics",
+                    "detail": "Độ trễ API p95 5 phút gần nhất",
                 },
-                {
-                    "label": "LLM jobs",
-                    "value": format_rate(job_rate),
-                    "status": "ok",
-                    "detail": "Tốc độ xử lý job worker 5 phút gần nhất",
-                },
+                {"label": "MinIO storage used", "value": format_bytes(minio_usage), "status": "ok", "detail": "Tổng dung lượng object đang lưu"},
+                {"label": "Postgres size", "value": format_bytes(postgres_db_size), "status": "ok", "detail": "Tổng dung lượng database"},
+                {"label": "Redis memory", "value": format_bytes(redis_memory), "status": "ok", "detail": "Bộ nhớ Redis đang dùng"},
+                {"label": "RabbitMQ messages", "value": f"{int(rabbitmq_messages)}", "status": "ok", "detail": "Tổng message đang nằm trong queue"},
             ]
+
+            service_metrics = []
 
             metrics = {
                 "serviceHealth": service_health,
                 "cards": cards,
+                "serviceMetrics": service_metrics,
                 "lastUpdated": datetime.now().strftime("%H:%M:%S"),
             }
 
@@ -267,14 +301,20 @@ class AdminService:
             logger.error(f"Failed to fetch system metrics from Prometheus: {str(e)}")
             service_health = [{"job": job, "up": False, "detail": "Lỗi kết nối Prometheus"} for job in monitored_jobs]
             cards = [
-                {"label": "Targets online", "value": "0/7", "status": "error", "detail": f"Lỗi Prometheus: {str(e)}"},
+                {"label": "Targets online", "value": "0/9", "status": "error", "detail": f"Lỗi Prometheus: {str(e)}"},
+                {"label": "Voice jobs", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "LLM jobs", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
                 {"label": "Request rate", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
                 {"label": "5xx rate", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
-                {"label": "P95 latency", "value": "0ms", "status": "ok", "detail": "Không có dữ liệu"},
-                {"label": "LLM jobs", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "API P95", "value": "0ms", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "MinIO storage used", "value": "0 B", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "Postgres size", "value": "0 B", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "Redis memory", "value": "0 B", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "RabbitMQ messages", "value": "0", "status": "ok", "detail": "Không có dữ liệu"},
             ]
             return {
                 "serviceHealth": service_health,
                 "cards": cards,
+                "serviceMetrics": [],
                 "lastUpdated": datetime.now().strftime("%H:%M:%S"),
             }

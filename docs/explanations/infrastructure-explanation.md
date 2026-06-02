@@ -116,8 +116,9 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 ## Observability với Prometheus
 
 - Cấu hình hạ tầng runtime được gom vào `infras/`: `infras/nginx.conf` cho reverse proxy và `infras/prometheus.yml` cho scrape jobs. Root `nginx.conf` đã được dọn bỏ; Docker Compose mount trực tiếp `./infras/nginx.conf`.
-- Prometheus chủ động scrape metrics từ `backend:8000/metrics`, `voice-worker:8000/metrics`, `llm-worker:9100/metrics` và các exporter Postgres/Redis/RabbitMQ/Nginx.
-- Frontend Admin gọi API `/api/admin/metrics` của Backend để lấy metrics tổng hợp hệ thống. API này được bảo vệ bởi lớp xác thực Admin của Backend, đồng thời sử dụng Redis cache 10 giây (`admin:metrics:snapshot`) để giảm tải các truy vấn lặp tới Prometheus.
+- Prometheus chủ động scrape metrics từ `backend:8000/metrics`, `voice-worker:8000/metrics`, `llm-worker:9100/metrics`, `minio:9000/minio/v2/metrics/cluster` và các exporter Postgres/Redis/RabbitMQ/Nginx.
+- MinIO bật `MINIO_PROMETHEUS_AUTH_TYPE=public` trong Compose để Prometheus nội bộ scrape cluster metrics mà không cần token riêng.
+- Frontend Admin gọi API `/api/admin/metrics` của Backend để lấy metrics tổng hợp hệ thống. API này được bảo vệ bởi lớp xác thực Admin, đồng thời sử dụng Redis cache 10 giây (`admin:metrics:snapshot`) để giảm tải các truy vấn lặp tới Prometheus. Payload gồm target health 9 thẻ (frontend được đại diện qua Nginx) và bộ thẻ metrics tổng hợp theo thứ tự: Targets online, Voice jobs, LLM jobs, Request rate, 5xx rate, API P95, MinIO storage used, Postgres size, Redis memory và RabbitMQ messages.
 - Prometheus API nằm hoàn toàn trong mạng nội bộ Docker và không bị phơi bày ra cổng public/Nginx.
 
 ---

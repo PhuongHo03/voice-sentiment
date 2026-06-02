@@ -84,7 +84,7 @@ Mỗi phân hệ sở hữu màn hình, hook, API/state, component và kiểu d�
   * Dùng `states/adminState.ts` cho type tab/toast và helper tính toán đường dẫn URL theo trạng thái Admin.
   * Gửi lệnh duyệt kích hoạt hoặc đổi quyền hạn tài khoản thông qua API module và kích hoạt Toast thông báo động.
 * **Components**: `AdminToast`, `AdminHeader`, `AdminTabs`, `AdminPerformanceDashboard`, `AdminObservabilityDashboard`, `AdminAccountManagement` chỉ nhận props từ screen và render giao diện Admin; logic nghiệp vụ vẫn nằm trong hook.
-* **Observability tab**: đường dẫn `/admin/observability` hiển thị metrics tổng hợp từ Prometheus. Frontend gọi API `/api/admin/metrics` trên Backend (được bảo vệ bằng admin session, cache 10s trên Redis), đảm bảo Prometheus API không bị phơi bày ra ngoài.
+* **Metrics tab**: đường dẫn `/admin/metrics` hiển thị metrics tổng hợp từ Prometheus. Frontend gọi API `/api/admin/metrics` trên Backend (được bảo vệ bằng admin session, cache 10s trên Redis), đảm bảo Prometheus API không bị phơi bày ra ngoài. Trang gồm khung tổng quan, khung 9 thẻ target health (frontend được đại diện qua Nginx) và một khung metrics tổng hợp theo thứ tự Targets online, Voice jobs, LLM jobs, Request rate, 5xx rate, API P95, MinIO storage used, Postgres size, Redis memory, RabbitMQ messages.
 
 ### 3. Phân hệ Đăng nhập/Đăng ký (`features/auth`)
 * **LoginPage** và **RegisterPage** chỉ xử lý hiển thị form và gán sự kiện.
@@ -115,4 +115,4 @@ Giao diện áp dụng các tiêu chuẩn thiết kế cao cấp nhất hiện n
 
 * **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` và `PROMETHEUS_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
 * **Bảo mật và CORS**: Cổng hoạt động Vite (`5173`) được bảo vệ hoàn toàn bên trong mạng nội bộ Docker. Reverse Proxy Nginx chạy ở cổng `9090` trên host đảm nhiệm việc tiếp nhận mọi yêu cầu tĩnh từ trình duyệt người dùng, tự động giải quyết triệt để lỗi chia sẻ tài nguyên nguồn gốc chéo (CORS) mà không cần cấu hình lỏng lẻo ở tầng API.
-* **Metrics hệ thống**: Admin metrics dashboard sử dụng API `/api/admin/metrics` của Backend. Backend hoạt động như một lớp trung gian truy vấn Prometheus và tổng hợp kết quả (sử dụng Redis cache 10 giây), bảo vệ an toàn các chỉ số vận hành sau lớp xác thực tài khoản Admin.
+* **Metrics hệ thống**: Admin metrics dashboard sử dụng API `/api/admin/metrics` của Backend. Backend hoạt động như một lớp trung gian truy vấn Prometheus và tổng hợp kết quả (sử dụng Redis cache 10 giây), bảo vệ an toàn các chỉ số vận hành sau lớp xác thực tài khoản Admin. Frontend không scrape trực tiếp; traffic frontend được quan sát qua Nginx target.

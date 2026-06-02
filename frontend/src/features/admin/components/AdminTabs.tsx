@@ -28,9 +28,9 @@ export const AdminTabs: React.FC<AdminTabsProps> = ({ activeTab, handleSetActive
         )}
       </button>
       <button
-        className={`admin-tab-btn ${activeTab === 'observability' ? 'active' : ''}`}
-        onClick={() => handleSetActiveTab('observability')}
-        id="tab-observability"
+        className={`admin-tab-btn ${activeTab === 'metrics' ? 'active' : ''}`}
+        onClick={() => handleSetActiveTab('metrics')}
+        id="tab-metrics"
       >
         📈 Metrics hệ thống
       </button>

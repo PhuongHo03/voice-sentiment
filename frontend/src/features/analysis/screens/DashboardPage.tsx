@@ -411,30 +411,6 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
               </svg>
             </button>
 
-            {/* Collapsed logout button */}
-            <div style={{ marginTop: 'auto', padding: '8px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
-              <button 
-                onClick={logout} 
-                title="Đăng xuất"
-                style={{ 
-                  width: '32px', 
-                  height: '32px', 
-                  padding: 0, 
-                  marginTop: 0, 
-                  borderRadius: '8px',
-                  background: 'rgba(244, 63, 94, 0.1)',
-                  color: 'var(--color-rose)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '1px solid rgba(244, 63, 94, 0.2)',
-                  cursor: 'pointer'
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              </button>
-            </div>
-
             {/* List of session circles with custom thin scrollbar */}
             <div className="collapsed-sessions-container">
               {sessions.map(s => {
@@ -459,6 +435,30 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
                   </div>
                 );
               })}
+            </div>
+
+            {/* Collapsed logout button */}
+            <div style={{ marginTop: 'auto', padding: '8px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={logout}
+                title="Đăng xuất"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  padding: 0,
+                  marginTop: 0,
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.1)',
+                  color: 'var(--color-rose)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(244, 63, 94, 0.2)',
+                  cursor: 'pointer'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              </button>
             </div>
           </div>
         )}

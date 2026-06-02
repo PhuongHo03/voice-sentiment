@@ -89,8 +89,8 @@ export function useAdminDashboard() {
       const path = window.location.pathname;
       if (path === '/admin/accounts') {
         setActiveTab('accounts');
-      } else if (path === '/admin/observability') {
-        setActiveTab('observability');
+      } else if (path === '/admin/metrics') {
+        setActiveTab('metrics');
       } else if (path.startsWith('/admin/employees')) {
         setActiveTab('performance');
         

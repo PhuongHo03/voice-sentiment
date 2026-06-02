@@ -4,7 +4,7 @@ import type { ObservabilityMetrics } from '../types/metrics';
 
 export function useObservabilityMetrics(active: boolean) {
   const { token } = useAuth();
-  const [metrics, setMetrics] = useState<ObservabilityMetrics>({ serviceHealth: [], cards: [], lastUpdated: null });
+  const [metrics, setMetrics] = useState<ObservabilityMetrics>({ serviceHealth: [], cards: [], serviceMetrics: [], lastUpdated: null });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +22,7 @@ export function useObservabilityMetrics(active: boolean) {
         throw new Error(`Lỗi ${response.status}: Không thể tải metrics`);
       }
       const data: ObservabilityMetrics = await response.json();
-      setMetrics(data);
+      setMetrics({ ...data, serviceMetrics: data.serviceMetrics ?? [] });
     } catch (err: any) {
       setError(err.message || 'Không thể tải metrics');
     } finally {

@@ -14,5 +14,6 @@ export interface ServiceHealthMetric {
 export interface ObservabilityMetrics {
   serviceHealth: ServiceHealthMetric[];
   cards: MetricCard[];
+  serviceMetrics: MetricCard[];
   lastUpdated: string | null;
 }

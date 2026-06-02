@@ -178,6 +178,9 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
               <h2>{selectedEmp.username}</h2>
               <p className="emp-meta-email">📧 {selectedEmp.email}</p>
             </div>
+            <div style={{ marginLeft: 'auto' }}>
+              <button className="close-panel-btn" onClick={() => { window.history.pushState({}, '', '/admin/employees'); /* allow hooks to pick up */ window.dispatchEvent(new PopStateEvent('popstate')); }} title="Đóng">✕</button>
+            </div>
           </div>
 
           <div className="emp-performance-summary">

@@ -1,17 +1,17 @@
-export type AdminTab = 'performance' | 'accounts' | 'observability';
+export type AdminTab = 'performance' | 'accounts' | 'metrics';
 export type ToastMessage = { text: string; type: 'success' | 'error' };
 
 export function getInitialAdminTab(pathname: string, savedTab: string | null): AdminTab {
   if (pathname === '/admin/accounts') return 'accounts';
-  if (pathname === '/admin/observability') return 'observability';
+  if (pathname === '/admin/metrics') return 'metrics';
   if (pathname === '/admin/employees') return 'performance';
-  if (savedTab === 'accounts' || savedTab === 'observability') return savedTab;
+  if (savedTab === 'accounts' || savedTab === 'metrics') return savedTab;
   return 'performance';
 }
 
 export function getAdminPathForTab(tab: AdminTab): string {
   if (tab === 'accounts') return '/admin/accounts';
-  if (tab === 'observability') return '/admin/observability';
+  if (tab === 'metrics') return '/admin/metrics';
   return '/admin/employees';
 }
 
