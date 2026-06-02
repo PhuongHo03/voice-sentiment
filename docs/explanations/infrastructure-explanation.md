@@ -8,7 +8,7 @@ Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập t
 
 ## Danh Sách Các Cổng Dịch Vụ Trên Host (Unified Port Mapping)
 
-Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào web chính được quy hoạch quanh dải **`9090` đến `9095`**; Prometheus API không mở thêm host port riêng mà được expose qua chính Nginx tại `/observability/api`:
+Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào web chính được quy hoạch quanh dải **`9090` đến `9095`**; Prometheus chỉ hoạt động nội bộ trong Docker Network và được truy cập an toàn qua phân hệ quản trị của Backend:
 
 | Dịch vụ Container | Cổng Host | Cổng Container | Phạm vi / Mục đích |
 |:---|:---:|:---:|:---|
@@ -18,7 +18,6 @@ Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập t
 | **RedisInsight** | **`9093`** | `5540` | Giao diện giám sát bộ nhớ đệm nhanh Redis |
 | **RabbitMQ Admin** | **`9094`** | `15672` | Trang quản trị hàng đợi công việc (RabbitMQ Management) |
 | **`voice-worker` API** | **`9095`** | `8000` | FastAPI Web Server cung cấp API giải mã ASR/STT độc lập |
-| **Prometheus API** | **`9090/observability/api`** | `9090` | API query metrics do Nginx proxy trực tiếp sang Prometheus, không đi qua backend |
 
 Các cổng giao thức kỹ thuật tiêu chuẩn của hạ tầng vẫn được giữ nguyên mặc định để phục vụ các kết nối client bên ngoài (như DBeaver, Redis CLI, S3 SDK, v.v.):
 *   **PostgreSQL**: Cổng **`5432`**
@@ -84,13 +83,13 @@ Toàn bộ hệ thống microservices được cấu hình thông qua **duy nh�
 [Trình duyệt] ──► (Cổng 9090) Nginx Proxy
                         │
                         ├──► [frontend:5173]      (Tải giao diện Dashboard React)
-                        ├──► [backend:8000]       (Giao dịch API nghiệp vụ có JWT)
-                        └──► [prometheus:9090]    (/observability/api cho Admin metrics dashboard)
+                        └──► [backend:8000]       (Giao dịch API nghiệp vụ có JWT)
                                    │
                                    ├──► [PostgreSQL:5432]  (Lưu dữ liệu cô lập: owner_id)
                                    ├──► [MinIO:9000]       (Lưu audio: uploads/{owner_id}/*)
                                    ├──► [Redis:6379]       (Cache riêng biệt: cache:user:{owner_id}/*)
-                                   └──► [RabbitMQ:5672]    (Đẩy tin nhắn Jobs vào Multi-Queue)
+                                   ├──► [RabbitMQ:5672]    (Đẩy tin nhắn Jobs vào Multi-Queue)
+                                   └──► [prometheus:9090]  (Truy vấn metrics nội bộ + Redis cache 10s)
                                              │
                                              └──► [llm-worker]  (Consumes Jobs không cổng)
                                                       │
@@ -118,8 +117,8 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 
 - Cấu hình hạ tầng runtime được gom vào `infras/`: `infras/nginx.conf` cho reverse proxy và `infras/prometheus.yml` cho scrape jobs. Root `nginx.conf` đã được dọn bỏ; Docker Compose mount trực tiếp `./infras/nginx.conf`.
 - Prometheus chủ động scrape metrics từ `backend:8000/metrics`, `voice-worker:8000/metrics`, `llm-worker:9100/metrics` và các exporter Postgres/Redis/RabbitMQ/Nginx.
-- Frontend Admin không gọi backend để lấy metrics. Dashboard `/admin/observability` gọi Prometheus HTTP API qua Nginx tại `/observability/api/v1/query`.
-- Lưu ý bảo mật: route `/observability/api/*` hiện chưa có lớp auth riêng ở Nginx; chỉ nên dùng local/dev hoặc đặt sau VPN/IP allowlist/basic auth khi production.
+- Frontend Admin gọi API `/api/admin/metrics` của Backend để lấy metrics tổng hợp hệ thống. API này được bảo vệ bởi lớp xác thực Admin của Backend, đồng thời sử dụng Redis cache 10 giây (`admin:metrics:snapshot`) để giảm tải các truy vấn lặp tới Prometheus.
+- Prometheus API nằm hoàn toàn trong mạng nội bộ Docker và không bị phơi bày ra cổng public/Nginx.
 
 ---
 
@@ -133,7 +132,6 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 | **RedisInsight** | http://localhost:9093 | — | Giám sát keys Redis cache |
 | **RabbitMQ** | http://localhost:9094 | guest/guest | Giám sát hàng đợi công việc |
 | **voice-worker API** | http://localhost:9095/docs | — | Swagger docs STT API |
-| **Prometheus API** | http://localhost:9090/observability/api/v1/query?query=up | — | API metrics do Nginx proxy trực tiếp sang Prometheus |
 
 ---
 

@@ -31,3 +31,12 @@ class RedisJobCache:
 
     def delete_stats(self, owner_id: str) -> None:
         self.client.delete(f"cache:user:{owner_id}:stats")
+
+    # ─── System Observability Metrics Cache ──────────────────────────
+    def get_metrics_snapshot(self) -> dict | None:
+        value = self.client.get("admin:metrics:snapshot")
+        return json.loads(value) if value else None
+
+    def set_metrics_snapshot(self, metrics: dict) -> None:
+        # Snapshot expires in 10 seconds per software note rule
+        self.client.setex("admin:metrics:snapshot", 10, json.dumps(metrics, ensure_ascii=False))

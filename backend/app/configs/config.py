@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     rabbitmq_url: str
+    prometheus_url: str = "http://prometheus:9090"
     rabbitmq_queue_count: int = 1
     minio_endpoint: str
     minio_access_key: str

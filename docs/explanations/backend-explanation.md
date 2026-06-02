@@ -162,11 +162,12 @@ Dịch vụ backend chạy trên cổng nội bộ `8000` của container và đ
 | GET | `/api/admin/users` | Chỉ Admin | Lấy danh sách tất cả các tài khoản hệ thống để duyệt duyệt |
 | PATCH | `/api/admin/users/{id}/status` | Chỉ Admin | Kích hoạt (Duyệt) hoặc Vô hiệu hóa một tài khoản người dùng |
 | PATCH | `/api/admin/users/{id}/role` | Chỉ Admin | Thay đổi vai trò (quyền hạn) của một tài khoản (`admin` <-> `employee`) |
+| GET | `/api/admin/metrics` | Chỉ Admin | Lấy metrics hệ thống tổng hợp (từ Prometheus API, được cache 10 giây trên Redis) |
 
 ### 4. Observability nội bộ
 | Method | Path | Quyền hạn | Mục đích |
 |---|---|---|---|
-| GET | `/metrics` | Nội bộ Docker | Prometheus scrape HTTP metrics, auth events và analysis submission counters. Frontend không gọi endpoint này trực tiếp; Prometheus gom dữ liệu rồi Nginx expose Prometheus API tại `/observability/api/*`. |
+| GET | `/metrics` | Nội bộ Docker | Prometheus scrape HTTP metrics, auth events và phân tích của dịch vụ backend này. |
 
 ---
 

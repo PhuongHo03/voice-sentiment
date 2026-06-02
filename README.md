@@ -33,7 +33,7 @@ Voice Sentiment is a production-ready call center analytics and quality assuranc
 | **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, observability tab, SVG donut & weekly charts |
 | **Voice Worker** | faster-whisper + WeSpeaker ONNX | Implemented: stateless ASR, FFmpeg PCM 16kHz resampling, ResNet34 ONNX diarizer + NumPy K-Means clustering |
 | **LLM Worker** | RabbitMQ + remote LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM role mapping and QA score evaluation |
-| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus observability via Nginx |
+| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus observability with backend proxy |
 
 ---
 
@@ -44,9 +44,9 @@ flowchart TD
     User[Browser Client] -->|Cổng 9090| Nginx[Nginx Reverse Proxy]
     Nginx -->|Định tuyến static| Frontend[React Web UI]
     Nginx -->|Định tuyến API có JWT| Backend[FastAPI Gateway]
-    Nginx -->|/observability/api| Prometheus[Prometheus API]
 
     Backend -->|Lưu metadata & user| Postgres[(PostgreSQL 16)]
+    Backend -->|Truy vấn metrics có cache 10s| Prometheus[Prometheus internal-only]
     Backend -->|Lưu file ghi âm uploads/user_id| MinIO[(MinIO S3)]
     Backend -->|Cache trạng thái nhanh| Redis[(Redis Cache)]
     Backend -->|Xuất bản Job không đồng bộ| RabbitMQ[(RabbitMQ Multi-Queue)]
@@ -103,13 +103,14 @@ docker compose ps
 
 ### 4. Verify Prometheus Observability
 
-Prometheus is not queried through the backend. Nginx exposes the Prometheus HTTP API to the browser:
+Prometheus operates completely within the internal Docker network. Verify target metrics endpoint via Nginx or backend internal integration (requires admin authorization):
 
 ```bash
-curl "http://localhost:9090/observability/api/v1/query?query=up"
+# Query the system metrics endpoint on the backend (requires an admin session JWT)
+curl "http://localhost:9090/api/admin/metrics"
 ```
 
-Expected: `status: "success"` and `up=1` for `backend`, `voice-worker`, `llm-worker`, `postgres`, `redis`, `rabbitmq`, and `nginx`.
+Expected: Returns aggregated metrics JSON including `serviceHealth` targets and formatted status cards.
 
 ### 5. Running Tests in Containers
 
@@ -232,7 +233,6 @@ python -m app.main
 | **MinIO Console** | `docker-compose.yml` | Object storage browser interface | S3 `9000`, Console `9092` |
 | **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `9093` |
 | **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `9094` |
-| **Prometheus API** | `infras/prometheus.yml` | Metrics query API exposed through Nginx `/observability/api` | `9090/observability/api` |
 
 ---
 
@@ -257,7 +257,7 @@ python -m app.main
 │   │   ├── features/
 │   │   │   ├── auth/                Login/register API, DTOs, state, screens, components
 │   │   │   ├── analysis/            Analysis API, DTOs, state helpers, dashboard screen, UI components
-│   │   │   └── admin/               Admin API, Prometheus API client, DTOs, state, metrics screen and components
+│   │   │   └── admin/               Admin API, DTOs, state, metrics screen and components
 │   │   └── styles/                  Main CSS design system variables
 │   └── package.json
 │
@@ -313,7 +313,6 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 | **MinIO Console** | `9092` | `minioadmin` | `minioadmin` |
 | **RedisInsight** | `9093` | — | — (connect to `redis`) |
 | **RabbitMQ Management** | `9094` | `guest` | `guest` |
-| **Prometheus API** | `9090/observability/api` | — | Query via Nginx, e.g. `/observability/api/v1/query?query=up` |
 | **PostgreSQL DB** | `5432` | `voice` | `voice` (DB: `voice_sentiment`) |
 
 ---
@@ -321,8 +320,7 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 ## Architecture Accuracy Notes
 
 - **Production-ready Port Firewalls**: Containers for `backend` and `frontend` have no exposed ports on the host. Every web package must route through Nginx proxy (`9090`) to access app assets, preventing bypass attacks.
-- **Prometheus API Routing**: Frontend admin metrics query Prometheus through Nginx at `/observability/api/*`; backend does not own or proxy this metrics query endpoint.
-- **Observability Security Note**: `/observability/api/*` is not protected by app-level auth in Nginx. Keep it local/dev, or add Nginx basic auth, IP allowlist, VPN, or `auth_request` before production exposure.
+- **Prometheus Internal-Only**: Frontend admin metrics dashboard calls `GET /api/admin/metrics` on the backend with admin authorization. The backend proxies Prometheus internally (Docker network) and caches the aggregated metrics on Redis for 10 seconds (`admin:metrics:snapshot`). Prometheus API is never exposed through Nginx or to the public network.
 - **Stateless/Stateful Segregation**: `voice-worker` holds zero database connections or state adapters, caching Whisper ASR and WeSpeaker ONNX models completely in-memory to scale rapidly.
 - **Tenant Isolation**: Data boundaries (S3 files, Redis caches, Postgres tables) are strictly separated by the UUID `owner_id` context.
 - **Centralized Master `.env`**: Build artifacts are stateless and decoupled from environment configs. Keep only root `.env` and `.env.example`; service-level `.env*` files are intentionally not used.

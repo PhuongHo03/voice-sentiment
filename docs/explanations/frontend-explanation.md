@@ -46,7 +46,6 @@ frontend/
 │   ├── screens/AdminDashboardPage.tsx                   ← Dashboard quản lý tiến độ nhân viên & duyệt tài khoản
 │   ├── hooks/useAdminDashboard.ts                       ← Hook quản trị (đồng bộ URL, kích hoạt tài khoản, đổi vai trò)
 │   ├── api/adminApi.ts                                  ← Hàm gọi API nhân viên, tài khoản và phân quyền admin
-│   ├── api/prometheusApi.ts                             ← Hàm query Prometheus API qua Nginx `/observability/api`
 │   ├── hooks/useObservabilityMetrics.ts                 ← Hook tải metrics hệ thống, trạng thái target và auto-refresh
 │   ├── dtos/adminDto.ts                                 ← Builder request payload và parser response admin
 │   ├── states/adminState.ts                             ← Type/tab/toast và helper đồng bộ URL state của Admin
@@ -85,7 +84,7 @@ Mỗi phân hệ sở hữu màn hình, hook, API/state, component và kiểu d�
   * Dùng `states/adminState.ts` cho type tab/toast và helper tính toán đường dẫn URL theo trạng thái Admin.
   * Gửi lệnh duyệt kích hoạt hoặc đổi quyền hạn tài khoản thông qua API module và kích hoạt Toast thông báo động.
 * **Components**: `AdminToast`, `AdminHeader`, `AdminTabs`, `AdminPerformanceDashboard`, `AdminObservabilityDashboard`, `AdminAccountManagement` chỉ nhận props từ screen và render giao diện Admin; logic nghiệp vụ vẫn nằm trong hook.
-* **Observability tab**: đường dẫn `/admin/observability` hiển thị metrics từ Prometheus. Frontend gọi Prometheus API qua Nginx (`/observability/api/v1/query`), không gọi backend để lấy metrics. `VITE_PROMETHEUS_BASE_URL` mặc định là `/observability/api` trong Docker/Nginx.
+* **Observability tab**: đường dẫn `/admin/observability` hiển thị metrics tổng hợp từ Prometheus. Frontend gọi API `/api/admin/metrics` trên Backend (được bảo vệ bằng admin session, cache 10s trên Redis), đảm bảo Prometheus API không bị phơi bày ra ngoài.
 
 ### 3. Phân hệ Đăng nhập/Đăng ký (`features/auth`)
 * **LoginPage** và **RegisterPage** chỉ xử lý hiển thị form và gán sự kiện.
@@ -114,6 +113,6 @@ Giao diện áp dụng các tiêu chuẩn thiết kế cao cấp nhất hiện n
 
 ## Cấu Hình Mạng & Cổng Giao Tiếp (Network Configuration)
 
-* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` và `VITE_PROMETHEUS_BASE_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
+* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` và `PROMETHEUS_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
 * **Bảo mật và CORS**: Cổng hoạt động Vite (`5173`) được bảo vệ hoàn toàn bên trong mạng nội bộ Docker. Reverse Proxy Nginx chạy ở cổng `9090` trên host đảm nhiệm việc tiếp nhận mọi yêu cầu tĩnh từ trình duyệt người dùng, tự động giải quyết triệt để lỗi chia sẻ tài nguyên nguồn gốc chéo (CORS) mà không cần cấu hình lỏng lẻo ở tầng API.
-* **Prometheus API**: Admin metrics dashboard dùng `/observability/api` do Nginx proxy sang Prometheus. Backend không gánh endpoint metrics cho frontend.
+* **Metrics hệ thống**: Admin metrics dashboard sử dụng API `/api/admin/metrics` của Backend. Backend hoạt động như một lớp trung gian truy vấn Prometheus và tổng hợp kết quả (sử dụng Redis cache 10 giây), bảo vệ an toàn các chỉ số vận hành sau lớp xác thực tài khoản Admin.

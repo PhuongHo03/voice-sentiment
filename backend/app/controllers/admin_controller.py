@@ -60,3 +60,9 @@ def update_user_role(
 ):
     """Change a user's role (admin ↔ employee)."""
     return _admin_service(db).update_user_role(user_id, payload.role_id, current_admin)
+
+
+@router.get("/metrics")
+def get_system_metrics(db: Session = Depends(get_session), current_admin: UserModel = Depends(require_admin)):
+    """Get system observability metrics scraped by Prometheus (secured with admin auth)."""
+    return _admin_service(db).get_system_metrics()
