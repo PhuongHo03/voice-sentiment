@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '../../auth/states/AuthContext';
 import type { ObservabilityMetrics } from '../types/metrics';
 
 export function useObservabilityMetrics(active: boolean) {
+  const { token } = useAuth();
   const [metrics, setMetrics] = useState<ObservabilityMetrics>({ serviceHealth: [], cards: [], lastUpdated: null });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -11,7 +13,11 @@ export function useObservabilityMetrics(active: boolean) {
     setError(null);
 
     try {
-      const response = await fetch('/api/admin/metrics', { credentials: 'include' });
+      if (!token) throw new Error('Bạn cần đăng nhập Admin để xem metrics');
+
+      const response = await fetch('/api/admin/metrics', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!response.ok) {
         throw new Error(`Lỗi ${response.status}: Không thể tải metrics`);
       }
@@ -22,7 +28,7 @@ export function useObservabilityMetrics(active: boolean) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (!active) return;
