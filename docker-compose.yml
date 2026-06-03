@@ -50,8 +50,8 @@ services:
     environment:
       DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT_INTERNAL:-6379}/0"
-      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@${RABBITMQ_HOST:-rabbitmq}:${RABBITMQ_PORT_INTERNAL:-5672}/%2F"
-      PROMETHEUS_URL: "http://${PROMETHEUS_HOST:-prometheus}:9090"
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F"
+      PROMETHEUS_URL: "http://prometheus:9090"
     restart: always
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 8000)
     depends_on:
@@ -161,7 +161,7 @@ services:
     environment:
       DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT_INTERNAL:-6379}/0"
-      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@${RABBITMQ_HOST:-rabbitmq}:${RABBITMQ_PORT_INTERNAL:-5672}/%2F"
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F"
     restart: always
     expose:
       - "9100"
