@@ -13,7 +13,7 @@
 
 ```text
 ├── voice-worker/
-│   ├── app/main.py                         ← Điểm khởi chạy FastAPI exposes cổng 8000 (Host: 9095)
+│   ├── app/main.py                         ← Điểm khởi chạy FastAPI exposes cổng 8000 (Chỉ chạy nội bộ Docker)
 │   ├── app/controllers/transcription_controller.py ← HTTP route POST /api/transcribe
 │   ├── app/configs/config.py               ← Cấu hình môi trường qua Pydantic Settings
 │   ├── app/configs/metrics.py              ← Prometheus /metrics, request/transcription counters và latency histograms

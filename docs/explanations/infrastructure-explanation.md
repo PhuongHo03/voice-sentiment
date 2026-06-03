@@ -8,7 +8,7 @@ Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập t
 
 ## Danh Sách Các Cổng Dịch Vụ Trên Host (Unified Port Mapping)
 
-Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, các cổng UI quản trị, bảng điều khiển (Console) và ngõ vào web chính được quy hoạch quanh dải **`9090` đến `9095`**; Prometheus chỉ hoạt động nội bộ trong Docker Network và được truy cập an toàn qua phân hệ quản trị của Backend:
+Để dễ dàng quản lý và tránh xung đột cổng trên máy chủ phát triển, các cổng UI quản trị, bảng điều khiển (Console), giám sát và ngõ vào web chính được quy hoạch quanh dải **`9090` đến `9095`**:
 
 | Dịch vụ Container | Cổng Host | Cổng Container | Phạm vi / Mục đích |
 |:---|:---:|:---:|:---|
@@ -17,13 +17,9 @@ Hạ tầng vận hành của toàn bộ hệ thống được khai báo tập t
 | **MinIO Console** | **`9092`** | `9001` | Trang quản trị giao diện (Console) bộ lưu trữ đối tượng S3 |
 | **RedisInsight** | **`9093`** | `5540` | Giao diện giám sát bộ nhớ đệm nhanh Redis |
 | **RabbitMQ Admin** | **`9094`** | `15672` | Trang quản trị hàng đợi công việc (RabbitMQ Management) |
-| **`voice-worker` API** | **`9095`** | `8000` | FastAPI Web Server cung cấp API giải mã ASR/STT độc lập |
+| **Prometheus UI** | **`9095`** | `9090` | Giao diện giám sát các chỉ số hoạt động hệ thống (Prometheus UI) |
 
-Các cổng giao thức kỹ thuật tiêu chuẩn của hạ tầng vẫn được giữ nguyên mặc định để phục vụ các kết nối client bên ngoài (như DBeaver, Redis CLI, S3 SDK, v.v.):
-*   **PostgreSQL**: Cổng **`5432`**
-*   **Redis**: Cổng **`6379`**
-*   **MinIO S3 API**: Cổng **`9000`**
-*   **RabbitMQ Protocol**: Cổng **`5672`**
+Các cổng kết nối giao thức nghiệp vụ (như PostgreSQL `5432`, Redis `6379`, MinIO S3 API `9000`, RabbitMQ `5672`, voice-worker `8000`, Ollama `11434`) đã được ẩn hoàn toàn khỏi Host. Chúng chỉ chạy và giao tiếp nội bộ trong mạng Docker Bridge (Internal Network) để nâng cao tính bảo mật, tránh các nguy cơ dò quét cổng từ bên ngoài mạng LAN.
 
 ---
 
@@ -65,9 +61,11 @@ Hệ thống nâng cấp từ 1 hàng đợi đơn lẻ lên mô hình **Đa hà
 
 ### 4. Giới hạn truy cập cổng Host (Host Port Hardening)
 > [!IMPORTANT]
-> Để bảo mật an toàn thông tin tối đa, toàn bộ các cổng kết nối hạ tầng và công cụ quản trị trên Host (bao gồm PostgreSQL `5432`, MinIO `9000`/`9092`, Redis `6379`, RabbitMQ `5672`/`9094`, Adminer `9091`, RedisInsight `9093`, voice-worker `9095` và Ollama `11434`) đã được giới hạn lắng nghe **chỉ trên localhost (`127.0.0.1`)**.
+> Để bảo mật an toàn thông tin tối đa:
+> 1. Toàn bộ các cổng dịch vụ hạ tầng & API nghiệp vụ (bao gồm PostgreSQL `5432`, MinIO S3 API `9000`, Redis `6379`, RabbitMQ `5672`, `voice-worker` `8000`, và `ollama` `11434`) được **ẩn hoàn toàn (không ánh xạ ra Host)**, chỉ cho tiếp cận nội bộ qua mạng Docker (Internal-Only).
+> 2. Các cổng quản trị UI (bao gồm Adminer `9091`, MinIO Console `9092`, RedisInsight `9093`, RabbitMQ Management `9094`, và Prometheus UI `9095`) được cấu hình lắng nghe **chỉ trên localhost (`127.0.0.1`)** của máy chủ phát triển.
 > 
-> Điều này đảm bảo các thiết bị khác trong mạng LAN không thể kết nối trực tiếp vào cơ sở dữ liệu, bộ nhớ đệm hay các dịch vụ xử lý nội bộ. Chỉ có duy nhất **Nginx Gateway (cổng `9090`)** là lắng nghe trên `0.0.0.0` để cho phép các người dùng khác trong mạng LAN truy cập vào giao diện ứng dụng.
+> Điều này đảm bảo các thiết bị khác trong mạng LAN không thể kết nối trực tiếp vào cơ sở dữ liệu, hàng đợi hay các bảng quản trị hạ tầng. Chỉ có duy nhất **Nginx Gateway (cổng `9090`)** là lắng nghe trên `0.0.0.0` (APP_BIND_IP) để cho phép người dùng khác trong mạng LAN truy cập vào giao diện ứng dụng chính.
 
 ---
 
@@ -138,8 +136,7 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 | **MinIO Console** | http://localhost:9092 | minioadmin/minioadmin | Xem/xoá file âm thanh |
 | **RedisInsight** | http://localhost:9093 | — | Giám sát keys Redis cache |
 | **RabbitMQ** | http://localhost:9094 | guest/guest | Giám sát hàng đợi công việc |
-| **voice-worker API** | http://localhost:9095/docs | — | Swagger docs STT API |
-| **Ollama (Optional)** | http://localhost:11434 | — | Mô hình LLM cục bộ tự host |
+| **Prometheus UI** | http://localhost:9095 | — | Xem metrics và tình trạng giám sát hệ thống |
 
 ---
 

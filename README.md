@@ -104,7 +104,7 @@ docker compose ps
 
 ### 4. Verify Prometheus Observability
 
-Prometheus operates completely within the internal Docker network. Verify target metrics endpoint via Nginx or backend internal integration (requires admin authorization):
+Prometheus UI is exposed locally on `http://localhost:9095`. For security and administrative control, the backend also exposes a proxy metrics endpoint (requires admin authorization):
 
 ```bash
 # Query the system metrics endpoint on the backend (requires an admin session JWT)
@@ -228,13 +228,14 @@ python -m app.main
 | **Nginx Proxy** | `docker-compose.yml` | Nginx reverse proxy routing web requests | `0.0.0.0:9090` (LAN) |
 | **Backend Gateway** | `backend/` | FastAPI gateway handling Auth, CRUD, DB, and Storage | Internal `8000` |
 | **Frontend UI** | `frontend/` | React dashboard panel organized by feature modules | Internal `5173` |
-| **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | `127.0.0.1:9095` |
+| **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | Internal `8000` |
 | **LLM Worker** | `llm-worker/` | Asynchronous RabbitMQ consumer and LLM client | Internal |
-| **Ollama (Optional)** | `docker-compose.yml` | Local LLM server running qwen2.5:1.5b | `127.0.0.1:11434` |
+| **Ollama (Optional)** | `docker-compose.yml` | Local LLM server running qwen2.5:1.5b | Internal `11434` |
 | **Adminer** | `docker-compose.yml` | PostgreSQL DB client UI | `127.0.0.1:9091` |
-| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | S3 `127.0.0.1:9000`, Console `127.0.0.1:9092` |
+| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | Console `127.0.0.1:9092` (S3 API Internal `9000`) |
 | **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `127.0.0.1:9093` |
 | **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `127.0.0.1:9094` |
+| **Prometheus UI** | `docker-compose.yml` | Metrics query and visualization dashboard | `127.0.0.1:9095` |
 
 ---
 

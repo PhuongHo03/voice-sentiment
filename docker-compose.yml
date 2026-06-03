@@ -6,8 +6,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-voice}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voice}
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
-    ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -19,8 +19,9 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_PROMETHEUS_AUTH_TYPE: public
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    expose:
+      - "9000"
     ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${MINIO_PORT:-9000}:9000"
       - "${LOCAL_BIND_IP:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9092}:9001"
     volumes:
       - minio_data:/data
@@ -29,8 +30,8 @@ services:
     image: redis:7-alpine
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
-    ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    expose:
+      - "6379"
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -38,9 +39,9 @@ services:
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${RABBITMQ_PORT:-5672}:5672"
       - "${LOCAL_BIND_IP:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-9094}:15672"
     expose:
+      - "5672"
       - "15692"
 
   backend:
@@ -102,6 +103,8 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
+    ports:
+      - "${LOCAL_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9095}:9090"
     volumes:
       - ./infras/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -144,8 +147,8 @@ services:
     build: ./voice-worker
     env_file: .env
     restart: always
-    ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${VOICE_WORKER_PORT:-9095}:8000"
+    expose:
+      - "8000"
 
   llm-worker:
     build: ./llm-worker
@@ -164,8 +167,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: always
-    ports:
-      - "${LOCAL_BIND_IP:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
+    expose:
+      - "11434"
     volumes:
       - ollama_data:/root/.ollama
     entrypoint: ["/bin/sh", "-c"]
