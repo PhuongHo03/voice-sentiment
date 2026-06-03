@@ -26,34 +26,38 @@ interface AdminPerformanceDashboardProps {
   negOffset: number;
   neuOffset: number;
   posOffset: number;
+  // current logged-in user id (optional) — used to mark and prioritize self
+  currentUserId?: string;
 }
 
-export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps> = ({
-  employees,
-  selectedEmp,
-  empStats,
-  empSessions,
-  selectedSession,
-  setSelectedSession,
-  isLoading,
-  isDetailsLoading,
-  error,
-  handleSelectEmployee,
-  totalEmployeesCount,
-  totalEmployeeJobs,
-  systemAvgScore,
-  donutPos,
-  donutNeu,
-  donutNeg,
-  donutTotal,
-  posPct,
-  neuPct,
-  negPct,
-  circ,
-  negOffset,
-  neuOffset,
-  posOffset,
-}) => {
+export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps> = (props) => {
+  const {
+    employees,
+    selectedEmp,
+    empStats,
+    empSessions,
+    selectedSession,
+    setSelectedSession,
+    isLoading,
+    isDetailsLoading,
+    error,
+    handleSelectEmployee,
+    totalEmployeesCount,
+    totalEmployeeJobs,
+    systemAvgScore,
+    donutPos,
+    donutNeu,
+    donutNeg,
+    donutTotal,
+    posPct,
+    neuPct,
+    negPct,
+    circ,
+    negOffset,
+    neuOffset,
+    posOffset,
+    currentUserId,
+  } = props;
   return (
     <main className="admin-content-grid">
     {/* Left: Stats + Employee list */}
@@ -104,7 +108,15 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => {
+                {(() => {
+                  // move current user to top if present
+                  const ordered = [...employees];
+                  try {
+                    const idx = ordered.findIndex(e => e.id === currentUserId);
+                    if (idx > 0) ordered.unshift(ordered.splice(idx, 1)[0]);
+                  } catch (e) {}
+                  return ordered.map((emp) => {
+
                   const pos = emp.sentiment_distribution.positive;
                   const neu = emp.sentiment_distribution.neutral;
                   const neg = emp.sentiment_distribution.negative;
@@ -124,7 +136,7 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
                       <td>
                         <div className="emp-name-cell">
                           <span className="emp-avatar">{emp.username.substring(0, 2).toUpperCase()}</span>
-                          <strong>{emp.username}</strong>
+                          <strong>{emp.username}</strong>{emp.id === currentUserId && <span className="self-badge"> (Bạn)</span>}
                         </div>
                       </td>
                       <td>{emp.email}</td>
@@ -148,7 +160,8 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
                       </td>
                     </tr>
                   );
-                })}
+                });
+                })()}
               </tbody>
             </table>
           </div>

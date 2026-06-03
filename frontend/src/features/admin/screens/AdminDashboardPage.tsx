@@ -101,6 +101,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
           negOffset={negOffset}
           neuOffset={neuOffset}
           posOffset={posOffset}
+          currentUserId={user?.id}
         />
       )}
 

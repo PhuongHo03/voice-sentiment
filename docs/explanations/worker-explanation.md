@@ -65,8 +65,9 @@
   * **Completed**: Khi kết thúc thành công, lưu kết quả bền vững vào Postgres, đồng thời lưu kết quả vào Redis dưới khóa `cache:user:{owner_id}:analysis:{job_id}` giúp Frontend lấy ngay tức thì.
   * **Failed**: Nếu có lỗi xảy ra, ghi nhận lỗi vào database và cập nhật trạng thái cache thành `failed` kèm nội dung `error_message`.
   * **Xóa Stats Cache (Smart Invalidation)**: Khi Job hoàn thành thành công, `llm-worker` chủ động gọi `self.cache.delete_stats(owner_id)` để thu hồi cache thống kê cũ của người dùng. Lần tiếp theo người dùng truy cập giao diện Dashboard, Backend sẽ tính toán dữ liệu thống kê mới nhất (bao gồm cả job vừa hoàn thành) để hiển thị chính xác 100%.
-* **Cơ chế gọi LLM 2 bước (Two-Pass LLM Analysis)**:
-  Do kết quả phân tách giọng nói từ `voice-worker` trả về ở dạng nhãn nặc danh (`Speaker 0` và `Speaker 1`), `llm_client.py` sẽ thực thi luồng gọi LLM 2 bước thông minh:
+* **Cơ chế gọi LLM 2 bước (Two-Pass LLM Analysis & Timeout)**:
+  * **Hạn định chờ HTTP Client (Timeout)**: Thư viện `httpx` gọi API LLM được cấu hình thời gian chờ tối đa là **300 giây (5 phút)** thay vì 60 giây mặc định. Thiết lập này cực kỳ quan trọng khi chạy các mô hình tự host cục bộ qua Ollama bằng CPU (không có GPU), đảm bảo kết nối không bị đứt quãng khi Ollama tải mô hình từ ổ đĩa và sinh văn bản phân tích.
+  * Do kết quả phân tách giọng nói từ `voice-worker` trả về ở dạng nhãn nặc danh (`Speaker 0` và `Speaker 1`), `llm_client.py` sẽ thực thi luồng gọi LLM 2 bước thông minh:
   * **Pass 1: Semantic Role Mapping (Gán vai hội thoại)**:
     Gửi 10 lượt hội thoại đầu tiên làm excerpt lên LLM cùng định nghĩa nghiệp vụ. LLM sẽ phân tích ngữ cảnh giao tiếp (chào hỏi, hỏi thông tin, tư vấn...) để dịch nhãn nặc danh thành vai trò thực tế:
     `"Speaker 0" -> "Nhân viên"` và `"Speaker 1" -> "Khách hàng"` (hoặc ngược lại).
@@ -109,8 +110,8 @@ Hệ thống được chứng minh khả năng tự khôi phục và phục hồ
 
 ## Observability với Prometheus
 
-- `voice-worker` expose `GET /metrics` trên cổng nội bộ `8000` để Prometheus scrape HTTP request metrics, transcription counters, upload size và transcription latency.
-- `llm-worker` không phải HTTP API nghiệp vụ, nên khởi động embedded Prometheus HTTP server trên cổng nội bộ `9100`. Prometheus scrape `llm-worker:9100/metrics` để lấy job counters, job duration, voice-worker call counters và LLM analytics call counters.
+- `voice-worker` expose `GET /metrics` trên cổng nội bộ `8000` để Prometheus scrape HTTP request metrics, transcription counters, upload size và transcription latency. Counter success/error được khởi tạo sẵn ở mức `0` khi service start để Prometheus `increase(...[5m])` tính được job đầu tiên sau khi scrape baseline.
+- `llm-worker` không phải HTTP API nghiệp vụ, nên khởi động embedded Prometheus HTTP server trên cổng nội bộ `9100`. Prometheus scrape `llm-worker:9100/metrics` để lấy job counters, job duration, voice-worker call counters và LLM analytics call counters. Các label counter audio/text + success/error cũng được khởi tạo sẵn để tránh mất event đầu tiên trong truy vấn tăng trưởng ngắn hạn.
 - Các metrics này chỉ dành cho Prometheus trong mạng Docker; frontend không gọi trực tiếp worker `/metrics`.
 
 ---

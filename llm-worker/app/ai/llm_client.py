@@ -471,7 +471,7 @@ class LlmTextAnalyticsClient:
             headers["Authorization"] = f"Bearer {settings.llm_api_key}"
 
         try:
-            with httpx.Client(timeout=60) as client:
+            with httpx.Client(timeout=300) as client:
                 url = f"{base_url.rstrip('/')}/chat/completions"
                 response = client.post(url, json=payload, headers=headers)
                 response.raise_for_status()

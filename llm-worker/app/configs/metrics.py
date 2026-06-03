@@ -26,6 +26,18 @@ LLM_ANALYTICS_REQUESTS_TOTAL = Counter(
 )
 
 
+def init_metrics() -> None:
+    for input_type in ("audio", "text"):
+        LLM_JOBS_TOTAL.labels(input_type, "success")
+        LLM_JOBS_TOTAL.labels(input_type, "error")
+        LLM_JOB_DURATION_SECONDS.labels(input_type)
+    LLM_VOICE_REQUESTS_TOTAL.labels("success")
+    LLM_VOICE_REQUESTS_TOTAL.labels("error")
+    LLM_ANALYTICS_REQUESTS_TOTAL.labels("success")
+    LLM_ANALYTICS_REQUESTS_TOTAL.labels("error")
+
+
 def start_metrics_server(port: int = 9100) -> None:
+    init_metrics()
     LLM_WORKER_UP.set(1)
     start_http_server(port)

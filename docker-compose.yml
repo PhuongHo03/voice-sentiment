@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voice}
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -20,8 +20,8 @@ services:
       MINIO_PROMETHEUS_AUTH_TYPE: public
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "9000:9000"
-      - "9092:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9092:9001"
     volumes:
       - minio_data:/data
 
@@ -30,7 +30,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -38,8 +38,8 @@ services:
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "5672:5672"
-      - "9094:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:9094:15672"
     expose:
       - "15692"
 
@@ -80,7 +80,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "9091:8080"
+      - "127.0.0.1:9091:8080"
     depends_on:
       - postgres
 
@@ -89,7 +89,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "9093:5540"
+      - "127.0.0.1:9093:5540"
     volumes:
       - redisinsight_data:/data
     depends_on:
@@ -145,7 +145,7 @@ services:
     env_file: .env
     restart: always
     ports:
-      - "9095:8000"
+      - "127.0.0.1:9095:8000"
 
   llm-worker:
     build: ./llm-worker
@@ -153,13 +153,35 @@ services:
     restart: always
     expose:
       - "9100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - postgres
       - redis
       - rabbitmq
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: always
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "
+      ollama serve &
+      PID=$$!;
+      sleep 5;
+      echo 'Checking and pulling ${LLM_MODEL:-qwen2.5:1.5b} model...';
+      ollama pull ${LLM_MODEL:-qwen2.5:1.5b};
+      wait $$PID;
+      "
 
 volumes:
   postgres_data:
   minio_data:
   redisinsight_data:
   prometheus_data:
+  ollama_data:

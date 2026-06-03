@@ -8,15 +8,8 @@ class AdminRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def list_employees(self) -> list[UserModel]:
-        employee_ids = self.session.query(UserRoleModel.user_id).filter(UserRoleModel.role_id == "employee").subquery()
-        return self.session.query(UserModel).filter(UserModel.id.in_(employee_ids)).all()
-
-    def has_employee_role(self, user_id: str) -> bool:
-        return self.session.query(UserRoleModel).filter(
-            UserRoleModel.user_id == user_id,
-            UserRoleModel.role_id == "employee",
-        ).first() is not None
+    def list_all_users_with_performance(self) -> list[UserModel]:
+        return self.session.query(UserModel).order_by(UserModel.created_at.desc()).all()
 
     def get_employee_job_count(self, employee_id: str) -> int:
         return self.session.query(func.count(AnalysisJobModel.id)).filter(AnalysisJobModel.owner_id == employee_id).scalar() or 0

@@ -25,15 +25,15 @@
 
 ## Overview
 
-Voice Sentiment is a production-ready call center analytics and quality assurance system. It processes phone recordings or text dialogs, applies deep-learning speaker diarization (ONNX) to split speakers, transcribes the voice using local Whisper ASR, maps roles semantically, and utilizes a remote LLM to analyze conversation sentiment and score customer service agent performance.
+Voice Sentiment is a production-ready call center analytics and quality assurance system. It processes phone recordings or text dialogs, applies deep-learning speaker diarization (ONNX) to split speakers, transcribes the voice using local Whisper ASR, maps roles semantically, and utilizes a remote or local self-hosted LLM (such as Ollama) to analyze conversation sentiment and score customer service agent performance.
 
 | Component | Tech Stack | Current State |
 |---|---|---|
 | **Backend API** | FastAPI + SQLAlchemy + Alembic | Implemented: JWT Auth, RBAC roles, tenant data isolation, DB migrations, RabbitMQ job publisher |
 | **Frontend UI** | React + Vite + TypeScript + CSS | Implemented: feature-based `auth`/`analysis`/`admin` modules, login/register, personal dashboard, admin overview panel, admin metrics dashboard with 9 target health cards and 10 aggregated metrics, SVG donut & weekly charts |
 | **Voice Worker** | faster-whisper + WeSpeaker ONNX | Implemented: stateless ASR, FFmpeg PCM 16kHz resampling, ResNet34 ONNX diarizer + NumPy K-Means clustering |
-| **LLM Worker** | RabbitMQ + remote LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM role mapping and QA score evaluation |
-| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, Prometheus internal-only observability with backend metrics proxy (9 targets including MinIO), Redis 10s cache |
+| **LLM Worker** | RabbitMQ + LLM client | Implemented: asynchronous job orchestration, tenant prefix caching, Two-Pass LLM (remote or local self-hosted Ollama) role mapping and QA score evaluation |
+| **Infrastructure** | Postgres, Redis, RabbitMQ, MinIO, Nginx, Prometheus, Ollama | Implemented: local-first Docker bridge network, master `.env` at root, hidden container port security, host port hardening (localhost only), Prometheus internal-only observability with backend metrics proxy (9 targets including MinIO), Redis 10s cache |
 
 ---
 
@@ -225,15 +225,16 @@ python -m app.main
 
 | Profile | Cwd / Entry point | Description | Ports (Host) |
 |---|---|---|---|
-| **Nginx Proxy** | `docker-compose.yml` | Nginx reverse proxy routing web requests | `9090` |
+| **Nginx Proxy** | `docker-compose.yml` | Nginx reverse proxy routing web requests | `0.0.0.0:9090` (LAN) |
 | **Backend Gateway** | `backend/` | FastAPI gateway handling Auth, CRUD, DB, and Storage | Internal `8000` |
 | **Frontend UI** | `frontend/` | React dashboard panel organized by feature modules | Internal `5173` |
-| **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | `9095` |
+| **Voice Worker** | `voice-worker/` | Stateless ASR, VAD & speaker segment diarizer | `127.0.0.1:9095` |
 | **LLM Worker** | `llm-worker/` | Asynchronous RabbitMQ consumer and LLM client | Internal |
-| **Adminer** | `docker-compose.yml` | PostgreSQL DB client UI | `9091` |
-| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | S3 `9000`, Console `9092` |
-| **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `9093` |
-| **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `9094` |
+| **Ollama (Optional)** | `docker-compose.yml` | Local LLM server running qwen2.5:1.5b | `127.0.0.1:11434` |
+| **Adminer** | `docker-compose.yml` | PostgreSQL DB client UI | `127.0.0.1:9091` |
+| **MinIO Console** | `docker-compose.yml` | Object storage browser interface | S3 `127.0.0.1:9000`, Console `127.0.0.1:9092` |
+| **RedisInsight** | `docker-compose.yml` | Redis key monitor console | `127.0.0.1:9093` |
+| **RabbitMQ Admin** | `docker-compose.yml` | Message broker management dashboard | `127.0.0.1:9094` |
 
 ---
 
@@ -309,12 +310,13 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 
 | Service | Host Port | Username | Password |
 |---|---|---|---|
-| **Nginx (App Gateway)** | `9090` | — | Create/Register in Web UI |
-| **Adminer** | `9091` | `voice` | `voice` (Server: `postgres`) |
-| **MinIO Console** | `9092` | `minioadmin` | `minioadmin` |
-| **RedisInsight** | `9093` | — | — (connect to `redis`) |
-| **RabbitMQ Management** | `9094` | `guest` | `guest` |
-| **PostgreSQL DB** | `5432` | `voice` | `voice` (DB: `voice_sentiment`) |
+| **Nginx (App Gateway)** | `0.0.0.0:9090` (LAN) | — | Create/Register in Web UI |
+| **Adminer** | `127.0.0.1:9091` | `voice` | `voice` (Server: `postgres`) |
+| **MinIO Console** | `127.0.0.1:9092` | `minioadmin` | `minioadmin` |
+| **RedisInsight** | `127.0.0.1:9093` | — | — (connect to `redis`) |
+| **RabbitMQ Management** | `127.0.0.1:9094` | `guest` | `guest` |
+| **PostgreSQL DB** | `127.0.0.1:5432` | `voice` | `voice` (DB: `voice_sentiment`) |
+| **Ollama (Optional)** | `127.0.0.1:11434` | — | — |
 
 ---
 
@@ -325,3 +327,4 @@ Read all values dynamically from the root `.env` file when deploying to Producti
 - **Stateless/Stateful Segregation**: `voice-worker` holds zero database connections or state adapters, caching Whisper ASR and WeSpeaker ONNX models completely in-memory to scale rapidly.
 - **Tenant Isolation**: Data boundaries (S3 files, Redis caches, Postgres tables) are strictly separated by the UUID `owner_id` context.
 - **Centralized Master `.env`**: Build artifacts are stateless and decoupled from environment configs. Keep only root `.env` and `.env.example`; service-level `.env*` files are intentionally not used.
+- **Host Port Hardening**: All internal databases, caches, queues, and helper services are bound strictly to `127.0.0.1` (localhost) on the host machine for production-grade security. Only the Nginx Gateway (`9090`) is exposed to `0.0.0.0` to safely allow LAN clients to access the web platform.

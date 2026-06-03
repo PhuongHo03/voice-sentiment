@@ -19,7 +19,7 @@ def _admin_service(session: Session) -> AdminService:
 @router.get("/employees")
 def get_employees(db: Session = Depends(get_session), current_admin: UserModel = Depends(require_admin)):
     """List all employee accounts with performance stats."""
-    return _admin_service(db).get_employees()
+    return _admin_service(db).get_employees(current_admin)
 
 
 @router.get("/employees/{employee_id}/stats")

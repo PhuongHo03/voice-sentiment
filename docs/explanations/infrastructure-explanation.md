@@ -63,6 +63,12 @@ Hệ thống áp dụng các tiêu chuẩn an toàn thông tin chuyên nghiệp 
 ### 3. Phân phối Đa hàng đợi linh hoạt (RabbitMQ Multi-Queue)
 Hệ thống nâng cấp từ 1 hàng đợi đơn lẻ lên mô hình **Đa hàng đợi song song** được điều phối động thông qua cấu hình biến môi trường `RABBITMQ_QUEUE_COUNT=2` đặt tại tệp `.env` root. Giúp hệ thống dễ dàng nâng cấu hình mở rộng (scaling) số lượng worker khi tải thực tế tăng cao.
 
+### 4. Giới hạn truy cập cổng Host (Host Port Hardening)
+> [!IMPORTANT]
+> Để bảo mật an toàn thông tin tối đa, toàn bộ các cổng kết nối hạ tầng và công cụ quản trị trên Host (bao gồm PostgreSQL `5432`, MinIO `9000`/`9092`, Redis `6379`, RabbitMQ `5672`/`9094`, Adminer `9091`, RedisInsight `9093`, voice-worker `9095` và Ollama `11434`) đã được giới hạn lắng nghe **chỉ trên localhost (`127.0.0.1`)**.
+> 
+> Điều này đảm bảo các thiết bị khác trong mạng LAN không thể kết nối trực tiếp vào cơ sở dữ liệu, bộ nhớ đệm hay các dịch vụ xử lý nội bộ. Chỉ có duy nhất **Nginx Gateway (cổng `9090`)** là lắng nghe trên `0.0.0.0` để cho phép các người dùng khác trong mạng LAN truy cập vào giao diện ứng dụng.
+
 ---
 
 ## Cấu Hình Tập Trung Master `.env` (Chuẩn 12-Factor App)
@@ -95,7 +101,7 @@ Toàn bộ hệ thống microservices được cấu hình thông qua **duy nh�
                                                       │
                                                       ├──► [MinIO:9000]         (Tải audio gốc)
                                                       ├──► [voice-worker:8000]  (HTTP POST giải mã ASR)
-                                                      ├──► [Remote LLM:8007]    (HTTP POST phân tích + đánh giá nhân viên)
+                                                      ├──► [Remote LLM / Local Ollama] (HTTP POST phân tích + đánh giá nhân viên)
                                                       └──► Ghi kết quả vào Postgres & Redis cache
 ```
 
@@ -133,6 +139,7 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 | **RedisInsight** | http://localhost:9093 | — | Giám sát keys Redis cache |
 | **RabbitMQ** | http://localhost:9094 | guest/guest | Giám sát hàng đợi công việc |
 | **voice-worker API** | http://localhost:9095/docs | — | Swagger docs STT API |
+| **Ollama (Optional)** | http://localhost:11434 | — | Mô hình LLM cục bộ tự host |
 
 ---
 

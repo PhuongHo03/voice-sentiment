@@ -14,8 +14,12 @@ class AdminService:
         self.repository = repository
         self.analysis_repository = analysis_repository
 
-    def get_employees(self) -> dict:
-        employees = self.repository.list_employees()
+    def get_employees(self, current_user: UserModel) -> dict:
+        employees = self.repository.list_all_users_with_performance()
+        # Sort: current user first
+        def sort_key(emp: UserModel):
+            return (emp.id != current_user.id, emp.created_at)
+        employees.sort(key=sort_key, reverse=True)
         return {"employees": [self._build_employee_stats(emp) for emp in employees]}
 
     def get_employee_stats(self, employee_id: str) -> dict:
@@ -128,8 +132,9 @@ class AdminService:
         }
 
     def _require_employee(self, employee_id: str) -> None:
-        if not self.repository.has_employee_role(employee_id):
-            raise HTTPException(status_code=404, detail="Employee not found")
+        user = self.repository.get_user(employee_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
     def get_system_metrics(self) -> dict:
         cache = RedisJobCache()
@@ -161,8 +166,8 @@ class AdminService:
                     client,
                     "histogram_quantile(0.95, sum(rate(voice_sentiment_http_request_duration_seconds_bucket[5m])) by (le))"
                 )
-                llm_job_rate_data = query_prom(client, "sum(rate(voice_sentiment_llm_jobs_total[5m]))")
-                voice_job_rate_data = query_prom(client, "sum(rate(voice_sentiment_voice_transcriptions_total[5m]))")
+                llm_job_rate_data = query_prom(client, "sum(increase(voice_sentiment_llm_jobs_total[5m]))")
+                voice_job_rate_data = query_prom(client, "sum(increase(voice_sentiment_voice_transcriptions_total[5m]))")
                 postgres_db_size_data = query_prom(client, "sum(pg_database_size_bytes)")
                 redis_memory_data = query_prom(client, "redis_memory_used_bytes")
                 rabbitmq_messages_data = query_prom(client, "sum(rabbitmq_queue_messages)")
@@ -209,8 +214,8 @@ class AdminService:
             req_rate = parse_val(req_rate_data)
             err_rate = parse_val(err_rate_data)
             latency = parse_val(latency_data)
-            llm_job_rate = parse_val(llm_job_rate_data)
-            voice_job_rate = parse_val(voice_job_rate_data)
+            llm_job_rate = parse_val(llm_job_rate_data) / 300.0  # increase over 5m → per-second rate
+            voice_job_rate = parse_val(voice_job_rate_data) / 300.0  # increase over 5m → per-second rate
             postgres_db_size = parse_val(postgres_db_size_data)
             redis_memory = parse_val(redis_memory_data)
             rabbitmq_messages = parse_val(rabbitmq_messages_data)
@@ -218,6 +223,8 @@ class AdminService:
 
             # 3. Format values
             def format_rate(val: float) -> str:
+                if val < 0.01:
+                    return f"{val:.3f}/s"
                 return f"{val:.2f}/s"
 
             def format_seconds(val: float) -> str:

@@ -91,7 +91,11 @@ export const AdminAccountManagement: React.FC<AdminAccountManagementProps> = ({
               </tr>
             </thead>
             <tbody>
-              {accounts.map((acc) => {
+              {(() => {
+                const ordered = [...accounts];
+                const idx = ordered.findIndex(a => a.id === userId);
+                if (idx > 0) ordered.unshift(ordered.splice(idx, 1)[0]);
+                return ordered.map((acc) => {
                 const isSelf = acc.id === user?.id;
                 const isUpdating = updatingUserId === acc.id;
                 return (
@@ -153,7 +157,8 @@ export const AdminAccountManagement: React.FC<AdminAccountManagementProps> = ({
                     </td>
                   </tr>
                 );
-              })}
+              });
+              })()}
             </tbody>
           </table>
         </div>

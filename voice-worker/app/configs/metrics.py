@@ -32,6 +32,11 @@ VOICE_UPLOAD_BYTES = Histogram(
 )
 
 
+def init_metrics() -> None:
+    VOICE_TRANSCRIPTIONS_TOTAL.labels("success")
+    VOICE_TRANSCRIPTIONS_TOTAL.labels("error")
+
+
 class PrometheusMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.scope.get("route").path if request.scope.get("route") else request.url.path

@@ -3,7 +3,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 
-from app.configs.metrics import PrometheusMiddleware, metrics_response
+from app.configs.metrics import PrometheusMiddleware, init_metrics, metrics_response
 from app.controllers.transcription_controller import router as transcription_router
 
 logging.basicConfig(
@@ -11,6 +11,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("voice_worker_main")
+init_metrics()
 
 app = FastAPI(title="Voice ASR Web Server", description="Stateless Speech-to-Text API")
 app.add_middleware(PrometheusMiddleware)
