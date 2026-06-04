@@ -1,5 +1,6 @@
 import React from 'react';
 import { useObservabilityMetrics } from '../hooks/useObservabilityMetrics';
+import { AdminRefreshButton } from './AdminRefreshButton';
 
 interface AdminObservabilityDashboardProps {
   active: boolean;
@@ -34,9 +35,7 @@ export const AdminObservabilityDashboard: React.FC<AdminObservabilityDashboardPr
           <h2>📈 Observability Dashboard</h2>
           <span>Cập nhật lần cuối: {metrics.lastUpdated ?? 'Chưa có dữ liệu'}</span>
         </div>
-        <button className="admin-inline-btn" onClick={refreshMetrics} disabled={isLoading}>
-          {isLoading ? 'Đang tải...' : 'Làm mới'}
-        </button>
+        <AdminRefreshButton onClick={refreshMetrics} isLoading={isLoading} />
       </div>
 
       {/* Service Health Grid */}

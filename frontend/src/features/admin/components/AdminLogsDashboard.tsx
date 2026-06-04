@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../auth/states/AuthContext';
 import { fetchWorkerLogsRequest } from '../api/adminApi';
+import { AdminRefreshButton } from './AdminRefreshButton';
+
 
 export const AdminLogsDashboard: React.FC = () => {
   const { token } = useAuth();
@@ -87,13 +89,7 @@ export const AdminLogsDashboard: React.FC = () => {
     <div className="logs-mgmt-layout animate-fade-in">
       <div className="section-header-row">
         <h2>📄 Nhật ký Hệ thống (Logs)</h2>
-        <button 
-          className="admin-inline-btn" 
-          onClick={() => loadLogs(true)} 
-          disabled={isLoading}
-        >
-          {isLoading ? 'Đang tải...' : 'Làm mới'}
-        </button>
+        <AdminRefreshButton onClick={() => loadLogs(true)} isLoading={isLoading} />
       </div>
 
       {/* Control Filters */}

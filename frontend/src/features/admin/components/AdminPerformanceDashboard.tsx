@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Employee, EmployeeSession, EmployeeStats } from '../types/admin';
+import { AdminRefreshButton } from './AdminRefreshButton';
 
 interface AdminPerformanceDashboardProps {
   employees: Employee[];
@@ -91,9 +92,7 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
       <div className="employees-list-section card">
         <div className="section-header-row">
           <h2>👥 Quản Lý Tiến Độ Nhân Viên</h2>
-          <button className="admin-inline-btn" onClick={fetchEmployees} disabled={isLoading}>
-            {isLoading ? 'Đang tải...' : 'Làm mới'}
-          </button>
+          <AdminRefreshButton onClick={fetchEmployees} isLoading={isLoading} />
         </div>
         {isLoading ? (
           <div className="loader-container"><div className="loader"></div><p>Đang tải dữ liệu nhân viên...</p></div>

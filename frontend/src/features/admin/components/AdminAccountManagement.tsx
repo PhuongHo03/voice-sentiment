@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AccountUser } from '../types/admin';
+import { AdminRefreshButton } from './AdminRefreshButton';
 
 interface AdminAccountManagementProps {
   accounts: AccountUser[];
@@ -66,9 +67,7 @@ export const AdminAccountManagement: React.FC<AdminAccountManagementProps> = ({
     <div className="account-table-section card">
       <div className="section-header-row">
         <h2>🔐 Quản Lý Tài Khoản Hệ Thống</h2>
-        <button className="admin-inline-btn" onClick={fetchAccounts} disabled={accountsLoading}>
-          {accountsLoading ? 'Đang tải...' : 'Làm mới'}
-        </button>
+        <AdminRefreshButton onClick={fetchAccounts} isLoading={accountsLoading} />
       </div>
 
       {accountsLoading ? (
