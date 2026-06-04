@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     rabbitmq_password: str = "guest"
 
     rabbitmq_queue_count: int = 1
-    minio_endpoint: str
+    minio_endpoint: str = "minio:9000"
     minio_access_key: str
     minio_secret_key: str
     minio_bucket: str = "voice-audio"
