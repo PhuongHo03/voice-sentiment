@@ -686,6 +686,7 @@ button[onClick*="toggleRecording"]:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 12px;
+  transition: all 0.3s ease;
 }
 
 .service-health-dot {
@@ -699,6 +700,94 @@ button[onClick*="toggleRecording"]:hover:not(:disabled) {
 .service-health-card.up .service-health-dot {
   background: var(--color-teal);
   box-shadow: 0 0 10px var(--color-teal-glow);
+}
+
+.service-health-card.down {
+  border-color: rgba(244, 63, 94, 0.45);
+  background: rgba(244, 63, 94, 0.03);
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.08);
+}
+
+.service-health-card.down .service-health-dot {
+  background: #f43f5e;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.75);
+  animation: pulse-glow-error 1.5s infinite;
+}
+
+.metrics-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: 16px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* System Alerts styling */
+.observability-alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.system-alert-banner {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  border-radius: 16px;
+  padding: 16px 20px;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 4px 15px rgba(244, 63, 94, 0.1);
+  animation: pulse-alert-border 2s infinite;
+}
+
+.system-alert-banner.error {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.system-alert-banner .alert-icon {
+  font-size: 1.25rem;
+  animation: alarm-shake 0.5s infinite alternate;
+}
+
+.system-alert-banner .alert-content strong {
+  color: #f43f5e;
+  text-shadow: 0 0 8px rgba(244, 63, 94, 0.3);
+}
+
+@keyframes pulse-glow-error {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(0.9);
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 0 16px rgba(244, 63, 94, 0.9);
+  }
+}
+
+@keyframes pulse-alert-border {
+  0%, 100% {
+    border-color: rgba(244, 63, 94, 0.35);
+  }
+  50% {
+    border-color: rgba(244, 63, 94, 0.6);
+    box-shadow: 0 4px 20px rgba(244, 63, 94, 0.15);
+  }
+}
+
+@keyframes alarm-shake {
+  0% { transform: rotate(-5deg); }
+  100% { transform: rotate(5deg); }
 }
 
 .observability-toolbar {

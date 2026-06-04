@@ -129,6 +129,7 @@ services:
       - redis-exporter
       - rabbitmq
       - minio
+      - blackbox-exporter
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
@@ -161,6 +162,16 @@ services:
       - nginx
     expose:
       - "9113"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    restart: always
+    expose:
+      - "9115"
+    volumes:
+      - ./infras/blackbox.yml:/config/blackbox.yml:ro
+    command:
+      - --config.file=/config/blackbox.yml
 
   voice-worker:
     build: ./voice-worker

@@ -173,10 +173,21 @@ class AdminService:
                 rabbitmq_messages_data = query_prom(client, "sum(rabbitmq_queue_messages)")
                 minio_usage_data = query_prom(client, "minio_cluster_usage_total_bytes")
 
+                # New metrics from Blackbox and Nginx exporter
+                blackbox_success_data = query_prom(client, 'avg_over_time(probe_success{instance="http://nginx/health"}[5m]) * 100')
+                blackbox_duration_data = query_prom(client, 'probe_duration_seconds{instance="http://nginx/health"}')
+                blackbox_ssl_expiry_data = query_prom(client, 'probe_ssl_earliest_cert_expiry{instance="http://nginx/health"} - time()')
+                
+                nginx_active_conn_data = query_prom(client, 'nginx_connections_active')
+                nginx_reading_conn_data = query_prom(client, 'nginx_connections_reading')
+                nginx_writing_conn_data = query_prom(client, 'nginx_connections_writing')
+                nginx_waiting_conn_data = query_prom(client, 'nginx_connections_waiting')
+
             # 1. Parse service health
             up_results = up_data.get("data", {}).get("result", [])
             service_health = []
             down_count = 0
+            down_services = []
             for job in monitored_jobs:
                 scrape_job = "nginx" if job == "frontend" else job
                 item = next((r for r in up_results if r.get("metric", {}).get("job") == scrape_job), None)
@@ -190,6 +201,7 @@ class AdminService:
 
                 if not is_up:
                     down_count += 1
+                    down_services.append(job)
 
                 service_health.append(
                     {
@@ -198,6 +210,14 @@ class AdminService:
                         "detail": "Đang scrape" if is_up else ("Mất scrape" if item else "Chưa có target"),
                     }
                 )
+
+            # Generate system alerts based on down services
+            alerts = []
+            for service in down_services:
+                alerts.append({
+                    "level": "error",
+                    "message": f"Dịch vụ {service} đã mất kết nối!"
+                })
 
             # 2. Parse numbers
             def parse_val(data: dict) -> float:
@@ -211,6 +231,16 @@ class AdminService:
                         pass
                 return 0.0
 
+            def parse_val_optional(data: dict) -> float | None:
+                res = data.get("data", {}).get("result", [])
+                if res and len(res) > 0:
+                    val = res[0].get("value", [0, "0"])[1]
+                    try:
+                        return float(val)
+                    except ValueError:
+                        pass
+                return None
+
             req_rate = parse_val(req_rate_data)
             err_rate = parse_val(err_rate_data)
             latency = parse_val(latency_data)
@@ -220,6 +250,16 @@ class AdminService:
             redis_memory = parse_val(redis_memory_data)
             rabbitmq_messages = parse_val(rabbitmq_messages_data)
             minio_usage = parse_val(minio_usage_data)
+
+            # Parse new values
+            bb_uptime = parse_val(blackbox_success_data)
+            bb_latency = parse_val(blackbox_duration_data)
+            bb_ssl = parse_val_optional(blackbox_ssl_expiry_data)
+
+            nginx_active = parse_val(nginx_active_conn_data)
+            nginx_reading = parse_val(nginx_reading_conn_data)
+            nginx_writing = parse_val(nginx_writing_conn_data)
+            nginx_waiting = parse_val(nginx_waiting_conn_data)
 
             # 3. Format values
             def format_rate(val: float) -> str:
@@ -242,6 +282,15 @@ class AdminService:
                     size /= 1024
                 return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
 
+            ssl_days = int(bb_ssl / 86400) if bb_ssl is not None else None
+            ssl_value = f"{ssl_days} ngày" if ssl_days is not None else "Không dùng SSL"
+            ssl_status = "ok"
+            if ssl_days is not None:
+                if ssl_days < 7:
+                    ssl_status = "error"
+                elif ssl_days < 15:
+                    ssl_status = "warn"
+
             cards = [
                 {
                     "label": "Targets online",
@@ -250,8 +299,32 @@ class AdminService:
                     "detail": (
                         "Tất cả target đang được Prometheus scrape"
                         if down_count == 0
-                        else f"{down_count} target đang down"
+                        else f"{down_count} target đang down ({', '.join(down_services)})"
                     ),
+                },
+                {
+                    "label": "HTTP Availability",
+                    "value": f"{bb_uptime:.2f}%",
+                    "status": "ok" if bb_uptime > 99.0 else ("warn" if bb_uptime > 95.0 else "error"),
+                    "detail": "Độ khả dụng HTTP (Uptime 5m)",
+                },
+                {
+                    "label": "External Ping",
+                    "value": format_seconds(bb_latency),
+                    "status": "ok" if bb_latency < 0.5 else ("warn" if bb_latency < 1.5 else "error"),
+                    "detail": "Độ trễ kết nối từ bên ngoài",
+                },
+                {
+                    "label": "SSL Certificate",
+                    "value": ssl_value,
+                    "status": ssl_status,
+                    "detail": "Hạn chứng chỉ bảo mật HTTPS",
+                },
+                {
+                    "label": "Active Connections",
+                    "value": f"{int(nginx_active)}",
+                    "status": "ok",
+                    "detail": f"Đọc/Ghi/Chờ: {int(nginx_reading)}/{int(nginx_writing)}/{int(nginx_waiting)}",
                 },
                 {
                     "label": "Voice jobs",
@@ -295,6 +368,7 @@ class AdminService:
                 "serviceHealth": service_health,
                 "cards": cards,
                 "serviceMetrics": service_metrics,
+                "alerts": alerts,
                 "lastUpdated": datetime.now().strftime("%H:%M:%S"),
             }
 
@@ -309,6 +383,10 @@ class AdminService:
             service_health = [{"job": job, "up": False, "detail": "Lỗi kết nối Prometheus"} for job in monitored_jobs]
             cards = [
                 {"label": "Targets online", "value": "0/9", "status": "error", "detail": f"Lỗi Prometheus: {str(e)}"},
+                {"label": "HTTP Availability", "value": "0.00%", "status": "error", "detail": "Không có dữ liệu"},
+                {"label": "External Ping", "value": "0ms", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "SSL Certificate", "value": "Không dùng SSL", "status": "ok", "detail": "Không có dữ liệu"},
+                {"label": "Active Connections", "value": "0", "status": "ok", "detail": "Không có dữ liệu"},
                 {"label": "Voice jobs", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
                 {"label": "LLM jobs", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
                 {"label": "Request rate", "value": "0.00/s", "status": "ok", "detail": "Không có dữ liệu"},
@@ -323,5 +401,6 @@ class AdminService:
                 "serviceHealth": service_health,
                 "cards": cards,
                 "serviceMetrics": [],
+                "alerts": [{"level": "error", "message": f"Lỗi hệ thống giám sát: {str(e)}"}],
                 "lastUpdated": datetime.now().strftime("%H:%M:%S"),
             }
