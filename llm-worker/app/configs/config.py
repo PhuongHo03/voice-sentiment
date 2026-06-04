@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_bucket: str = "voice-audio"
     minio_secure: bool = False
-    voice_server_uri: str  # URL to connect to the voice-worker API (e.g. http://voice-worker:8000)
+    voice_server_url: str  # URL to connect to the voice-worker API (e.g. http://voice-worker:8000)
     llm_base_url: str
     llm_api_key: str
     llm_model: str

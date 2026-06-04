@@ -40,7 +40,7 @@ class AnalyzeJob:
                 audio = self.storage.read(message["audio_object_key"])
                 
                 # Make HTTP POST call to stateless voice-worker web server
-                voice_url = f"{settings.voice_server_uri.rstrip('/')}/api/transcribe"
+                voice_url = f"{settings.voice_server_url.rstrip('/')}/api/transcribe"
                 logger.info(f"Connecting to stateless voice-worker server to transcribe audio at: '{voice_url}'...")
                 
                 files = {'file': (message.get("audio_object_key", "audio.wav"), audio, 'audio/wav')}

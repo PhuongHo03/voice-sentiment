@@ -80,7 +80,7 @@ jobs:
       MINIO_ENDPOINT: "localhost:9000"
       MINIO_ACCESS_KEY: "minioadmin"
       MINIO_SECRET_KEY: "minioadmin"
-      VOICE_SERVER_URI: "http://localhost:9095"
+      VOICE_SERVER_URL: "http://localhost:9095"
       LLM_BASE_URL: "http://localhost:8007/v1"
       LLM_API_KEY: "sk-dummykey"
       LLM_MODEL: "dummy-model"
