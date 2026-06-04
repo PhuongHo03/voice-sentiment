@@ -33,6 +33,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
     toastMessage,
     updatingUserId,
     handleSelectEmployee,
+    fetchEmployees,
     fetchAccounts,
     handleToggleStatus,
     handleChangeRole,
@@ -103,6 +104,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
           neuOffset={neuOffset}
           posOffset={posOffset}
           currentUserId={user?.id}
+          fetchEmployees={fetchEmployees}
         />
       )}
 

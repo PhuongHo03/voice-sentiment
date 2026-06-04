@@ -66,8 +66,8 @@ export const AdminAccountManagement: React.FC<AdminAccountManagementProps> = ({
     <div className="account-table-section card">
       <div className="section-header-row">
         <h2>🔐 Quản Lý Tài Khoản Hệ Thống</h2>
-        <button className="refresh-btn" onClick={fetchAccounts} title="Làm mới danh sách">
-          🔄 Làm mới
+        <button className="admin-inline-btn" onClick={fetchAccounts} disabled={accountsLoading}>
+          {accountsLoading ? 'Đang tải...' : 'Làm mới'}
         </button>
       </div>
 

@@ -88,11 +88,11 @@ export const AdminLogsDashboard: React.FC = () => {
       <div className="section-header-row">
         <h2>📄 Nhật ký Hệ thống (Logs)</h2>
         <button 
-          className="refresh-btn" 
+          className="admin-inline-btn" 
           onClick={() => loadLogs(true)} 
           disabled={isLoading}
         >
-          {isLoading ? <span className="btn-spinner"></span> : '🔄 Làm mới'}
+          {isLoading ? 'Đang tải...' : 'Làm mới'}
         </button>
       </div>
 

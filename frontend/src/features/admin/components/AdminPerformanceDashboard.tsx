@@ -28,6 +28,7 @@ interface AdminPerformanceDashboardProps {
   posOffset: number;
   // current logged-in user id (optional) — used to mark and prioritize self
   currentUserId?: string;
+  fetchEmployees: () => void;
 }
 
 export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps> = (props) => {
@@ -57,6 +58,7 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
     neuOffset,
     posOffset,
     currentUserId,
+    fetchEmployees,
   } = props;
   return (
     <main className="admin-content-grid">
@@ -87,7 +89,12 @@ export const AdminPerformanceDashboard: React.FC<AdminPerformanceDashboardProps>
       </div>
 
       <div className="employees-list-section card">
-        <h2>👥 Quản Lý Tiến Độ Nhân Viên</h2>
+        <div className="section-header-row">
+          <h2>👥 Quản Lý Tiến Độ Nhân Viên</h2>
+          <button className="admin-inline-btn" onClick={fetchEmployees} disabled={isLoading}>
+            {isLoading ? 'Đang tải...' : 'Làm mới'}
+          </button>
+        </div>
         {isLoading ? (
           <div className="loader-container"><div className="loader"></div><p>Đang tải dữ liệu nhân viên...</p></div>
         ) : error ? (
