@@ -66,3 +66,33 @@ def update_user_role(
 def get_system_metrics(db: Session = Depends(get_session), current_admin: UserModel = Depends(require_admin)):
     """Get system observability metrics scraped by Prometheus (secured with admin auth)."""
     return _admin_service(db).get_system_metrics()
+
+
+@router.get("/logs/{worker_name}")
+def get_worker_logs(
+    worker_name: str,
+    lines: int = 100,
+    current_admin: UserModel = Depends(require_admin)
+):
+    """Retrieve the recent logs of a given worker ('llm-worker' or 'voice-worker') (secured with admin auth)."""
+    import os
+    from fastapi import HTTPException
+    
+    if worker_name not in ["llm-worker", "voice-worker"]:
+        raise HTTPException(status_code=400, detail="Tên worker không hợp lệ. Chọn 'llm-worker' hoặc 'voice-worker'.")
+        
+    log_file = f"/app/logs/{worker_name}.log"
+    if not os.path.exists(log_file):
+        return {
+            "worker": worker_name,
+            "logs": f"Log file {log_file} does not exist yet. Please check if the worker container has started and generated logs."
+        }
+        
+    try:
+        from collections import deque
+        with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+            last_lines = deque(f, maxlen=lines)
+            logs_content = "".join(last_lines)
+        return {"worker": worker_name, "logs": logs_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không thể đọc file logs: {str(e)}")

@@ -60,6 +60,13 @@ export async function updateUserRoleRequest(token: string, account: AccountUser,
     body: JSON.stringify(buildUpdateUserRolePayload(newRoleId)),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Lỗi cập nhật vai trò');
   return parseAdminMessageResponse(data);
+}
+
+export async function fetchWorkerLogsRequest(token: string, workerName: string, lines: number = 100): Promise<{ worker: string; logs: string }> {
+  const response = await fetch(`/api/admin/logs/${workerName}?lines=${lines}`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) throw new Error('Không thể tải logs của worker');
+  return await response.json();
 }

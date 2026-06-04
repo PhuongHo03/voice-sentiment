@@ -6,6 +6,7 @@ import { AdminTabs } from '../components/AdminTabs';
 import { AdminPerformanceDashboard } from '../components/AdminPerformanceDashboard';
 import { AdminAccountManagement } from '../components/AdminAccountManagement';
 import { AdminObservabilityDashboard } from '../components/AdminObservabilityDashboard';
+import { AdminLogsDashboard } from '../components/AdminLogsDashboard';
 
 interface AdminDashboardPageProps {
   onBackToPersonal: () => void;
@@ -128,6 +129,13 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
       ════════════════════════════════════════════════════════════ */}
       {activeTab === 'metrics' && (
         <AdminObservabilityDashboard active={activeTab === 'metrics'} />
+      )}
+
+      {/* ════════════════════════════════════════════════════════════
+          TAB 4: LOGS
+      ════════════════════════════════════════════════════════════ */}
+      {activeTab === 'logs' && (
+        <AdminLogsDashboard />
       )}
     </div>
   );

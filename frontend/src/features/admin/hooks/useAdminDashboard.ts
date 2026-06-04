@@ -91,6 +91,8 @@ export function useAdminDashboard() {
         setActiveTab('accounts');
       } else if (path === '/admin/metrics') {
         setActiveTab('metrics');
+      } else if (path === '/admin/logs') {
+        setActiveTab('logs');
       } else if (path.startsWith('/admin/employees')) {
         setActiveTab('performance');
         

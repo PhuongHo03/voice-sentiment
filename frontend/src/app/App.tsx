@@ -27,9 +27,11 @@ function AppContent() {
       const activeTab = localStorage.getItem('admin_active_tab') || 'performance';
       const newPath = activeTab === 'accounts'
         ? '/admin/accounts'
-        : activeTab === 'observability'
-          ? '/admin/observability'
-          : '/admin/employees';
+        : activeTab === 'metrics'
+          ? '/admin/metrics'
+          : activeTab === 'logs'
+            ? '/admin/logs'
+            : '/admin/employees';
       if (window.location.pathname !== newPath) {
         window.history.pushState({ mode, activeTab }, '', newPath);
       }

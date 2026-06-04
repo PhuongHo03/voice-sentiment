@@ -6,9 +6,16 @@ from fastapi import FastAPI
 from app.configs.metrics import PrometheusMiddleware, init_metrics, metrics_response
 from app.controllers.transcription_controller import router as transcription_router
 
+import os
+
+os.makedirs("/app/logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("/app/logs/voice-worker.log", encoding="utf-8")
+    ]
 )
 logger = logging.getLogger("voice_worker_main")
 init_metrics()

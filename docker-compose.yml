@@ -57,6 +57,8 @@ services:
     restart: always
     expose:
       - "8000"
+    volumes:
+      - shared_logs:/app/logs:ro
     # Host port hidden for production-grade security (Only exposed internally to Nginx on port 8000)
     depends_on:
       - postgres
@@ -168,6 +170,7 @@ services:
       - "8000"
     volumes:
       - huggingface_cache:/root/.cache
+      - shared_logs:/app/logs
 
   llm-worker:
     build: ./llm-worker
@@ -181,6 +184,8 @@ services:
     restart: always
     expose:
       - "9100"
+    volumes:
+      - shared_logs:/app/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -214,3 +219,4 @@ volumes:
   prometheus_data:
   ollama_data:
   huggingface_cache:
+  shared_logs:

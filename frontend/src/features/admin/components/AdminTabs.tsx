@@ -34,6 +34,13 @@ export const AdminTabs: React.FC<AdminTabsProps> = ({ activeTab, handleSetActive
       >
         📈 Metrics hệ thống
       </button>
+      <button
+        className={`admin-tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
+        onClick={() => handleSetActiveTab('logs')}
+        id="tab-logs"
+      >
+        📄 Logs hệ thống
+      </button>
     </nav>
   );
 };
