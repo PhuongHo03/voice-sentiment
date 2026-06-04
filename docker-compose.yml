@@ -46,7 +46,6 @@ services:
 
   backend:
     build: ./backend
-    env_file: .env
     environment:
       DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       REDIS_URL: "redis://${REDIS_HOST:-redis}:6379/0"
@@ -54,6 +53,10 @@ services:
       PROMETHEUS_URL: "http://prometheus:9090"
       MINIO_ENDPOINT: "minio:9000"
       MINIO_SECURE: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
+      JWT_SECRET: ${JWT_SECRET}
     restart: always
     expose:
       - "8000"
@@ -68,7 +71,8 @@ services:
 
   frontend:
     build: ./frontend
-    env_file: .env
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     restart: always
     expose:
       - "5173"
@@ -175,7 +179,9 @@ services:
 
   voice-worker:
     build: ./voice-worker
-    env_file: .env
+    environment:
+      VOICE_LANGUAGE_CODE: ${VOICE_LANGUAGE_CODE:-vi-VN}
+      PYTHONUNBUFFERED: "1"
     restart: always
     expose:
       - "8000"
@@ -185,13 +191,19 @@ services:
 
   llm-worker:
     build: ./llm-worker
-    env_file: .env
     environment:
       DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       REDIS_URL: "redis://${REDIS_HOST:-redis}:6379/0"
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F"
       MINIO_ENDPOINT: "minio:9000"
       MINIO_SECURE: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
+      VOICE_SERVER_URL: ${VOICE_SERVER_URL}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_KEY: ${LLM_API_KEY}
     restart: always
     expose:
       - "9100"
