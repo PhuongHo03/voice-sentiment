@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_bucket: str = "voice-audio"
     minio_secure: bool = False
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:9090,http://localhost:5173"
     jwt_secret: str = "supersecretkeychangeinproduction"
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 1440
