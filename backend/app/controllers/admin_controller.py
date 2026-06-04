@@ -83,6 +83,10 @@ def get_worker_logs(
         
     log_file = f"/app/logs/{worker_name}.log"
     if not os.path.exists(log_file):
+        # Fallback to local logs directory (running outside Docker)
+        log_file = f"./logs/{worker_name}.log"
+        
+    if not os.path.exists(log_file):
         return {
             "worker": worker_name,
             "logs": f"Log file {log_file} does not exist yet. Please check if the worker container has started and generated logs."

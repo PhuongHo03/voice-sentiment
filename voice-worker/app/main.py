@@ -8,13 +8,23 @@ from app.controllers.transcription_controller import router as transcription_rou
 
 import os
 
-os.makedirs("/app/logs", exist_ok=True)
+log_dir = "/app/logs"
+try:
+    os.makedirs(log_dir, exist_ok=True)
+    test_file = os.path.join(log_dir, ".write_test")
+    with open(test_file, "w") as f:
+        f.write("test")
+    os.remove(test_file)
+except (PermissionError, OSError):
+    log_dir = "./logs"
+    os.makedirs(log_dir, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/app/logs/voice-worker.log", encoding="utf-8")
+        logging.FileHandler(os.path.join(log_dir, "voice-worker.log"), encoding="utf-8")
     ]
 )
 logger = logging.getLogger("voice_worker_main")
