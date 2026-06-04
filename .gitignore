@@ -108,21 +108,14 @@ voice-worker/.env.example
 frontend/.env
 frontend/.env.example
 
-# Legacy (old worker/ directory — now replaced by llm-worker/ & voice-worker/)
-worker/.env
-worker/.env.example
-
 # ============================================================
 # Docs policy: only docs/explanations/ is tracked
 # ============================================================
-docs/logs-fix/
 docs/plannings/
-logs-fix/
 
 # Runtime & Downloaded AI Models
 # ============================================================
 .runtime/
-nginx.conf
 voice-worker/models/
 llm-worker/models/
 *.onnx

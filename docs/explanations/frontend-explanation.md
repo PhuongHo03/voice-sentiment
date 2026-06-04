@@ -113,6 +113,6 @@ Giao diện áp dụng các tiêu chuẩn thiết kế cao cấp nhất hiện n
 
 ## Cấu Hình Mạng & Cổng Giao Tiếp (Network Configuration)
 
-* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` và `PROMETHEUS_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
+* **Master `.env` ở Root**: Biến cấu hình `VITE_API_BASE_URL` được nạp tập trung từ file `.env` ngoài root của dự án thông qua Docker Compose.
 * **Bảo mật và CORS**: Cổng hoạt động Vite (`5173`) được bảo vệ hoàn toàn bên trong mạng nội bộ Docker. Reverse Proxy Nginx chạy ở cổng `9090` trên host đảm nhiệm việc tiếp nhận mọi yêu cầu tĩnh từ trình duyệt người dùng, tự động giải quyết triệt để lỗi chia sẻ tài nguyên nguồn gốc chéo (CORS) mà không cần cấu hình lỏng lẻo ở tầng API.
 * **Metrics hệ thống**: Admin metrics dashboard sử dụng API `/api/admin/metrics` của Backend. Backend hoạt động như một lớp trung gian truy vấn Prometheus và tổng hợp kết quả (sử dụng Redis cache 10 giây), bảo vệ an toàn các chỉ số vận hành sau lớp xác thực tài khoản Admin. Frontend không scrape trực tiếp; traffic frontend được quan sát qua Nginx target.
