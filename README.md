@@ -10,6 +10,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge)
 ![Whisper](https://img.shields.io/badge/Whisper-ASR-green?style=for-the-badge)
 ![WeSpeaker](https://img.shields.io/badge/WeSpeaker-ONNX_Diarization-orange?style=for-the-badge)
+![Ollama](https://img.shields.io/badge/Ollama-Self--Hosted-black?style=for-the-badge)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=for-the-badge)
 ![Redis](https://img.shields.io/badge/Redis-Cache-red?style=for-the-badge)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Multi--Queue-orange?style=for-the-badge)
@@ -59,7 +60,7 @@ flowchart TD
     VoiceWorker -->|3. WeSpeaker ONNX Diarizer| ONNX[ResNet34 ONNX + NumPy K-Means]
     
     LLMWorker -->|Trả về Speaker 0/1 turns| LLMWorker
-    LLMWorker -->|Gửi phân tích 2 bước| LLM[Remote OpenAI-compatible LLM]
+    LLMWorker -->|Gửi phân tích 2 bước| LLM[Ollama / Remote LLM]
     LLM -->|Pass 1: Semantic Role Mapping| LLM
     LLM -->|Pass 2: QA Score & Sentiment| LLM
     LLMWorker -->|Lưu kết quả bền vững| Postgres
