@@ -23,6 +23,7 @@ jobs:
       MINIO_ENDPOINT: "localhost:9000"
       MINIO_ACCESS_KEY: "minioadmin"
       MINIO_SECRET_KEY: "minioadmin"
+      JWT_SECRET: "dummysecretkeyforcitestingpurposeonly"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
