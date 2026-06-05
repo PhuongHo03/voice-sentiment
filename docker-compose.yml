@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-voice_sentiment}
       POSTGRES_USER: ${POSTGRES_USER:-voice}
@@ -9,6 +10,7 @@ services:
     expose:
       - "5432"
     volumes:
+      - ./infras/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - postgres_data:/var/lib/postgresql/data
 
   minio:
@@ -28,21 +30,30 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     expose:
       - "6379"
+    volumes:
+      - ./infras/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    command: sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"
     environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
       - "${LOCAL_BIND_IP:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-9094}:15672"
     expose:
       - "5672"
       - "15692"
+    volumes:
+      - ./infras/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infras/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infras/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
 
   backend:
     build: ./backend
@@ -57,6 +68,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
       JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_QUEUE_COUNT: ${RABBITMQ_QUEUE_COUNT:-1}
     restart: always
     expose:
       - "8000"
@@ -88,7 +100,7 @@ services:
     ports:
       - "${APP_BIND_IP:-0.0.0.0}:${NGINX_PORT:-9090}:80"
     volumes:
-      - ./infras/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infras/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - backend
       - frontend
@@ -123,7 +135,7 @@ services:
     ports:
       - "${LOCAL_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9095}:9090"
     volumes:
-      - ./infras/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infras/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     depends_on:
       - backend
@@ -173,7 +185,7 @@ services:
     expose:
       - "9115"
     volumes:
-      - ./infras/blackbox.yml:/config/blackbox.yml:ro
+      - ./infras/blackbox/blackbox.yml:/config/blackbox.yml:ro
     command:
       - --config.file=/config/blackbox.yml
 
@@ -204,6 +216,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_MODEL: ${LLM_MODEL}
       LLM_API_KEY: ${LLM_API_KEY}
+      RABBITMQ_QUEUE_COUNT: ${RABBITMQ_QUEUE_COUNT:-1}
     restart: always
     expose:
       - "9100"
@@ -238,6 +251,7 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  redis_data:
   redisinsight_data:
   prometheus_data:
   ollama_data:

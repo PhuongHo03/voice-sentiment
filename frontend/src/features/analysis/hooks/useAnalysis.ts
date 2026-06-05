@@ -129,6 +129,10 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
       } catch (err) {
         if (isMounted) {
           setError(err instanceof Error ? err.message : 'Không thể tải chi tiết session');
+          const errMsg = err instanceof Error ? err.message.toLowerCase() : '';
+          if (errMsg.includes('not found') || errMsg.includes('404')) {
+            setActiveSessionIdPersisted(null);
+          }
         }
       }
     }
@@ -187,6 +191,18 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
           }
         } catch (err) {
           console.error(`Lỗi poll session ${id}:`, err);
+          const errMsg = err instanceof Error ? err.message.toLowerCase() : '';
+          if (errMsg.includes('not found') || errMsg.includes('404')) {
+            setSessions(prev => prev.map(item => {
+              if (item.job_id === id) {
+                return {
+                  ...item,
+                  status: 'failed',
+                };
+              }
+              return item;
+            }));
+          }
         }
       });
     }, 2000);

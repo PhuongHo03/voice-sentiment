@@ -60,7 +60,12 @@
 ### 2. `llm-worker` (RabbitMQ Orchestrator & Two-Pass LLM)
 
 * **Điều phối không đồng bộ (Orchestrator) & Quản lý Cache**: 
-  Dịch vụ lắng nghe tin nhắn công việc từ đa hàng đợi RabbitMQ (`analysis.jobs`), tự động cập nhật trạng thái đồng thời lên Postgres và Redis cache riêng biệt của người dùng (`owner_id`) theo vòng đời:
+  Dịch vụ lắng nghe tin nhắn công việc từ các hàng đợi RabbitMQ tĩnh (được định nghĩa trước trong `definitions.json`). Tùy theo cấu hình `RABBITMQ_QUEUE_COUNT` ở tệp `.env`:
+  * Nếu bằng `1`: Worker sẽ tiêu thụ từ hàng đợi mặc định `analysis.jobs`.
+  * Nếu bằng `2`: Worker sẽ tiêu thụ song song từ cả hai hàng đợi phân vùng là `analysis.jobs.1` và `analysis.jobs.2`.
+  * **Lưu ý**: Cả publisher (backend) và consumer (llm-worker) đều đã lược bỏ lệnh khai báo hàng đợi động (`queue_declare`) để đảm bảo RabbitMQ definitions là nguồn thông tin duy nhất đáng tin cậy (source of truth). Do đó, số lượng queue cấu hình phải tương thích chính xác với file `definitions.json`.
+  
+  Worker tự động cập nhật trạng thái đồng thời lên Postgres và Redis cache riêng biệt của người dùng (`owner_id`) theo vòng đời:
   * **Processing**: Cập nhật trạng thái trong Redis thành `processing` ngay khi worker bắt đầu xử lý âm thanh.
   * **Completed**: Khi kết thúc thành công, lưu kết quả bền vững vào Postgres, đồng thời lưu kết quả vào Redis dưới khóa `cache:user:{owner_id}:analysis:{job_id}` giúp Frontend lấy ngay tức thì.
   * **Failed**: Nếu có lỗi xảy ra, ghi nhận lỗi vào database và cập nhật trạng thái cache thành `failed` kèm nội dung `error_message`.

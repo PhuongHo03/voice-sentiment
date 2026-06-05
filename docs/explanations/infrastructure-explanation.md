@@ -57,7 +57,14 @@ Hệ thống áp dụng các tiêu chuẩn an toàn thông tin chuyên nghiệp 
      * **backend**: Khi người dùng nhấn nút xóa một phiên hội thoại, API Gateway thực hiện xóa phiên trong Postgres, xóa file trong MinIO, xóa job cache trong Redis và đồng thời xóa stats cache của user để cập nhật lại Dashboard.
 
 ### 3. Phân phối Đa hàng đợi linh hoạt (RabbitMQ Multi-Queue)
-Hệ thống nâng cấp từ 1 hàng đợi đơn lẻ lên mô hình **Đa hàng đợi song song** được điều phối động thông qua cấu hình biến môi trường `RABBITMQ_QUEUE_COUNT=2` đặt tại tệp `.env` root. Giúp hệ thống dễ dàng nâng cấu hình mở rộng (scaling) số lượng worker khi tải thực tế tăng cao.
+Hệ thống nâng cấp từ 1 hàng đợi đơn lẻ lên mô hình **Đa hàng đợi song song** được điều phối động thông qua cấu hình biến môi trường `RABBITMQ_QUEUE_COUNT` đặt tại tệp `.env` root. Giúp hệ thống dễ dàng nâng cấu hình mở rộng (scaling) số lượng worker khi tải thực tế tăng cao.
+
+> [!IMPORTANT]
+> **Giới hạn số lượng Queue cấu hình**:
+> - Hiện tại, hệ thống chỉ hỗ trợ giá trị `RABBITMQ_QUEUE_COUNT` là **1** hoặc **2** dựa trên danh sách các hàng đợi tĩnh đã khai báo trước trong `infras/rabbitmq/definitions.json` (đóng vai trò là source of truth duy nhất).
+> - Khi `RABBITMQ_QUEUE_COUNT=1`: Các jobs phân tích sẽ được chuyển hướng hoàn toàn vào hàng đợi mặc định `analysis.jobs`.
+> - Khi `RABBITMQ_QUEUE_COUNT=2`: Các jobs phân tích sẽ được băm (hash) theo `owner_id` hoặc chọn ngẫu nhiên để phân bổ đều vào hai hàng đợi song song là `analysis.jobs.1` và `analysis.jobs.2`.
+> - **Nguyên lý thiết kế**: Hệ thống đã loại bỏ hoàn toàn cơ chế khai báo hàng đợi động (`channel.queue_declare`) trong mã nguồn ứng dụng (backend và llm-worker). Mọi hàng đợi phải được định nghĩa tĩnh trong `definitions.json`. Do đó, nếu thiết lập `RABBITMQ_QUEUE_COUNT` lên 3 hoặc cao hơn mà không bổ sung khai báo tương ứng trong `definitions.json` sẽ khiến `llm-worker` crash khi cố gắng consume một hàng đợi không tồn tại.
 
 ### 4. Giới hạn truy cập cổng Host (Host Port Hardening)
 > [!IMPORTANT]
@@ -119,7 +126,7 @@ Truy cập `http://localhost:9094` với tài khoản `guest` / `guest`.
 
 ## Observability với Prometheus
 
-- Cấu hình hạ tầng runtime được gom vào `infras/`: `infras/nginx.conf` cho reverse proxy và `infras/prometheus.yml` cho scrape jobs. Root `nginx.conf` đã được dọn bỏ; Docker Compose mount trực tiếp `./infras/nginx.conf`.
+- Cấu hình hạ tầng runtime được tổ chức ngăn nắp vào các thư mục con của `infras/`: `infras/nginx/nginx.conf` cho reverse proxy, `infras/prometheus/prometheus.yml` cho scrape jobs, `infras/blackbox/blackbox.yml` cho Blackbox prober, `infras/redis/redis.conf` cho Redis, `infras/postgres/postgresql.conf` cho PostgreSQL, và `infras/rabbitmq/` cho RabbitMQ (gồm `rabbitmq.conf`, `enabled_plugins`, và `definitions.json` - đóng vai trò là source of truth cho các hàng đợi). Docker Compose thực hiện mount trực tiếp từ các thư mục con này.
 - Prometheus chủ động scrape metrics từ `backend:8000/metrics`, `voice-worker:8000/metrics`, `llm-worker:9100/metrics`, `minio:9000/minio/v2/metrics/cluster` và các exporter Postgres/Redis/RabbitMQ/Nginx.
 - MinIO bật `MINIO_PROMETHEUS_AUTH_TYPE=public` trong Compose để Prometheus nội bộ scrape cluster metrics mà không cần token riêng.
 - Frontend Admin gọi API `/api/admin/metrics` của Backend để lấy metrics tổng hợp hệ thống. API này được bảo vệ bởi lớp xác thực Admin, đồng thời sử dụng Redis cache 10 giây (`admin:metrics:snapshot`) để giảm tải các truy vấn lặp tới Prometheus. Payload gồm target health 9 thẻ (frontend được đại diện qua Nginx) và bộ thẻ metrics tổng hợp theo thứ tự: Targets online, Voice jobs, LLM jobs, Request rate, 5xx rate, API P95, MinIO storage used, Postgres size, Redis memory và RabbitMQ messages.

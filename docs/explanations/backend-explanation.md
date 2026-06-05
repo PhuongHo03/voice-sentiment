@@ -125,8 +125,8 @@ Dịch vụ Backend tích hợp chặt chẽ bộ nhớ đệm **Redis** để g
 ### 3. Thu hồi và Xóa bỏ Cache Chủ động (Active Cache Invalidation)
 Để tránh dữ liệu cũ (stale data) hiển thị sai lệch trên Dashboard, Backend chủ động thực hiện thu hồi cache:
 * **Khi xóa phiên (`DELETE /api/analysis/{job_id}`)**:
-  * Xóa bản ghi trong PostgreSQL.
-  * Xóa file âm thanh vật lý trong MinIO.
+  * Xóa bản ghi trong PostgreSQL (bao gồm cả cascade delete sang kết quả kết quả phân tích trong `analysis_results`).
+  * Giữ nguyên file âm thanh vật lý trong MinIO (người dùng có thể xóa thủ công file sau này qua danh sách quản lý file).
   * Lập tức gọi `cache.delete(job_id, owner_id)` để xóa cache trạng thái job.
   * Lập tức gọi `cache.delete_stats(owner_id)` để xóa cache stats. Khi người dùng quay lại Dashboard, hệ thống sẽ tự động tính toán lại dữ liệu sạch từ Postgres và ghi đè cache stats mới.
 
@@ -150,10 +150,19 @@ Dịch vụ backend chạy trên cổng nội bộ `8000` của container và đ
 | GET | `/api/analysis` | Nhân viên/Admin| Lấy danh sách lịch sử phiên cá nhân (phân trang) |
 | GET | `/api/analysis/{job_id}` | Nhân viên/Admin| Lấy kết quả phân tích chi tiết của một phiên thuộc sở hữu cá nhân |
 | PATCH | `/api/analysis/{job_id}` | Nhân viên/Admin| Đổi tên phiên làm việc cá nhân |
-| DELETE| `/api/analysis/{job_id}` | Nhân viên/Admin| Xoá phiên, xóa file MinIO vật lý và dọn dẹp Redis cache |
+| DELETE| `/api/analysis/{job_id}` | Nhân viên/Admin| Xoá phiên trong DB và dọn dẹp Redis cache (không xóa file MinIO vật lý) |
 | GET | `/api/analysis/stats` | Nhân viên/Admin| Tổng hợp chỉ số hiệu suất cá nhân hiển thị lên Dashboard |
 
-### 3. Phân hệ Quản trị (Admin Operations)
+### 3. Phân hệ Quản lý File âm thanh (MinIO File Operations)
+| Method | Path | Quyền hạn | Mục đích |
+|---|---|---|---|
+| POST | `/api/files/upload` | Nhân viên/Admin| Tải file ghi âm lên MinIO (chỉ lưu trữ, chưa bắt đầu phân tích) |
+| GET | `/api/files` | Nhân viên/Admin| Danh sách các file âm thanh đã tải lên |
+| GET | `/api/files/url` | Nhân viên/Admin| Lấy presigned URL để truy cập/tải trực tiếp file từ MinIO |
+| GET | `/api/files/stream` | Nhân viên/Admin| Stream âm thanh từ MinIO qua backend (dùng cho trình phát nhạc HTML5 của Dashboard) |
+| DELETE| `/api/files` | Nhân viên/Admin| Xoá file khỏi MinIO. **Lưu ý: Hệ thống chặn xóa file nếu đang được liên kết với bất kỳ phiên phân tích (session) nào (đang hoạt động hoặc đã hoàn thành/thất bại).** |
+
+### 4. Phân hệ Quản trị (Admin Operations)
 | Method | Path | Quyền hạn | Mục đích |
 |---|---|---|---|
 | GET | `/api/admin/employees` | Chỉ Admin | Lấy danh sách nhân viên kèm hiệu năng, điểm số và sentiment |
@@ -164,7 +173,7 @@ Dịch vụ backend chạy trên cổng nội bộ `8000` của container và đ
 | PATCH | `/api/admin/users/{id}/role` | Chỉ Admin | Thay đổi vai trò (quyền hạn) của một tài khoản (`admin` <-> `employee`) |
 | GET | `/api/admin/metrics` | Chỉ Admin | Lấy metrics hệ thống tổng hợp (9 target health, HTTP rate/latency, LLM/Voice jobs, MinIO storage, Postgres size, Redis memory, RabbitMQ messages từ Prometheus API, được cache 10 giây trên Redis) |
 
-### 4. Observability nội bộ
+### 5. Observability nội bộ
 | Method | Path | Quyền hạn | Mục đích |
 |---|---|---|---|
 | GET | `/metrics` | Nội bộ Docker | Prometheus scrape HTTP metrics, auth events và phân tích của dịch vụ backend này. |

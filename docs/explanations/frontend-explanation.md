@@ -72,6 +72,7 @@ Mỗi phân hệ sở hữu màn hình, hook, API/state, component và kiểu d�
 * **Tệp Custom Hook**: `hooks/useAnalysis.ts` quản lý:
   * Tải danh sách lịch sử phiên phân tích khi khởi chạy.
   * Lắng nghe trạng thái và thực hiện cơ chế Polling (truy vấn lặp mỗi 2 giây) nếu phát hiện có phiên đang xử lý (`pending`/`processing`).
+  * **Cơ chế xử lý lỗi Polling (404 Bug Fix)**: Nếu phiên phân tích được lưu trữ trong local state hoặc `localStorage` không còn tồn tại trên máy chủ (ví dụ: do database reset hoặc bị xóa), API sẽ phản hồi lỗi `404 Not Found`. Hook sẽ chủ động phát hiện lỗi này, dọn dẹp ID phiên lỗi khỏi `localStorage` và cập nhật trạng thái phiên trong React state sang `failed` để chấm dứt chu kỳ gọi API lặp vô hạn gây quá tải.
   * Thực thi các hàm đổi tên, xóa phiên, tải lên file ghi âm và nạp dữ liệu thống kê cá nhân.
 * **API/DTO/State/Types/Components**: `api/analysisApi.ts`, `dtos/analysisDto.ts`, `states/analysisState.ts`, `types/analysis.ts` và `components/*` nằm cùng phân hệ để tránh rải business logic phân tích ra root.
 

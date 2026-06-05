@@ -146,14 +146,23 @@ class FileService:
 
     def delete(self, object_key: str, owner_id: str) -> dict[str, str]:
         self._require_owner_prefix(object_key, owner_id, "delete this file")
-        if self.repository and self.repository.has_active_job_for_key(object_key):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Không thể xóa file: đang có job phân tích (pending/processing) sử dụng file này. "
-                    "Vui lòng chờ job hoàn thành hoặc thất bại trước khi xóa."
-                ),
-            )
+        if self.repository and self.repository.has_job_referencing_key(object_key):
+            if self.repository.has_active_job_for_key(object_key):
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Không thể xóa file: đang có job phân tích (pending/processing) sử dụng file này. "
+                        "Vui lòng chờ job hoàn thành hoặc thất bại trước khi xóa."
+                    ),
+                )
+            else:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Không thể xóa file: file này đang được liên kết với một phiên phân tích (session). "
+                        "Vui lòng xóa phiên phân tích trước khi xóa file."
+                    ),
+                )
 
         client = self._get_minio_client()
         try:

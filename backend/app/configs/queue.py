@@ -22,6 +22,5 @@ class RabbitMqJobPublisher:
 
         connection = pika.BlockingConnection(pika.URLParameters(settings.rabbitmq_url))
         channel = connection.channel()
-        channel.queue_declare(queue=target_queue, durable=True)
         channel.basic_publish("", target_queue, json.dumps(message).encode("utf-8"), pika.BasicProperties(delivery_mode=2))
         connection.close()

@@ -21,7 +21,6 @@ class RabbitMqAnalysisConsumer:
         params.heartbeat = 0  # Disable heartbeats to prevent timeouts during long voice transcription HTTP calls
         connection = pika.BlockingConnection(params)
         channel = connection.channel()
-        channel.queue_declare(queue=self.queue_name, durable=True)
         channel.basic_qos(prefetch_count=1)
 
         def handle(_, method, __, body: bytes) -> None:
@@ -52,7 +51,6 @@ class RabbitMqAnalysisConsumer:
             queues = [f"analysis.jobs.{i}" for i in range(1, count + 1)]
 
         for q in queues:
-            channel.queue_declare(queue=q, durable=True)
             channel.basic_consume(queue=q, on_message_callback=handle)
             logger.info(f"Waiting for jobs on queue: '{q}'...")
 

@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import MagicMock
+from fastapi import HTTPException
 from app.services.analysis_service import SubmitAudioAnalysis, SubmitTextAnalysis
+from app.services.file_service import FileService
 
 def test_submit_text_analysis_success():
     # 1. Mock dependency objects
@@ -60,3 +62,55 @@ def test_submit_audio_analysis_success():
         {"job_id": "audio-job-uuid-456", "input_type": "audio", "audio_object_key": "uploads/user-123/call.webm", "owner_id": "user-123"},
         owner_id="user-123"
     )
+
+def test_delete_file_success():
+    # 1. Mock dependency objects
+    mock_repo = MagicMock()
+    mock_repo.has_job_referencing_key.return_value = False
+
+    # 2. Instantiate FileService and mock _get_minio_client
+    file_service = FileService(repository=mock_repo)
+    mock_minio = MagicMock()
+    file_service._get_minio_client = MagicMock(return_value=mock_minio)
+
+    # 3. Execute
+    result = file_service.delete("uploads/user-123/call.webm", "user-123")
+
+    # 4. Assertions
+    assert result == {"message": "File deleted successfully"}
+    mock_repo.has_job_referencing_key.assert_called_once_with("uploads/user-123/call.webm")
+    mock_minio.remove_object.assert_called_once_with("voice-audio", "uploads/user-123/call.webm")
+
+def test_delete_file_active_job_conflict():
+    # 1. Mock repository to simulate active job
+    mock_repo = MagicMock()
+    mock_repo.has_job_referencing_key.return_value = True
+    mock_repo.has_active_job_for_key.return_value = True
+
+    file_service = FileService(repository=mock_repo)
+
+    # 2. Execute & Assert conflict
+    with pytest.raises(HTTPException) as exc_info:
+        file_service.delete("uploads/user-123/call.webm", "user-123")
+
+    assert exc_info.value.status_code == 409
+    assert "đang có job phân tích" in exc_info.value.detail
+    mock_repo.has_job_referencing_key.assert_called_once_with("uploads/user-123/call.webm")
+    mock_repo.has_active_job_for_key.assert_called_once_with("uploads/user-123/call.webm")
+
+def test_delete_file_completed_job_conflict():
+    # 1. Mock repository to simulate completed/failed job (referenced but not active)
+    mock_repo = MagicMock()
+    mock_repo.has_job_referencing_key.return_value = True
+    mock_repo.has_active_job_for_key.return_value = False
+
+    file_service = FileService(repository=mock_repo)
+
+    # 2. Execute & Assert conflict
+    with pytest.raises(HTTPException) as exc_info:
+        file_service.delete("uploads/user-123/call.webm", "user-123")
+
+    assert exc_info.value.status_code == 409
+    assert "vui lòng xóa phiên phân tích" in exc_info.value.detail.lower()
+    mock_repo.has_job_referencing_key.assert_called_once_with("uploads/user-123/call.webm")
+    mock_repo.has_active_job_for_key.assert_called_once_with("uploads/user-123/call.webm")

@@ -284,9 +284,13 @@ python -m app.main
 │
 ├── docs/                            Architecture explanations only
 │   └── explanations/                Backend, frontend, worker and infrastructure explanations
-├── infras/                          Runtime infra configs for Nginx and Prometheus
-│   ├── nginx.conf                   Local Reverse Proxy Gateway config
-│   └── prometheus.yml               Prometheus scrape config for app and infra metrics
+├── infras/                          Runtime infra configs (separated into subdirectories)
+│   ├── blackbox/                    Blackbox exporter scrape configs
+│   ├── nginx/                       Local Reverse Proxy Gateway config
+│   ├── postgres/                    PostgreSQL database configuration
+│   ├── prometheus/                  Prometheus scrape config for app and infra metrics
+│   ├── rabbitmq/                    RabbitMQ queue definitions & custom config
+│   └── redis/                       Redis custom database configuration
 ├── docker-compose.yml               Production-grade microservices coordinator
 └── .env                             Master centralized environment configuration
 ```

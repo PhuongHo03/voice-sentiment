@@ -75,6 +75,15 @@ class SqlAlchemyAnalysisRepository:
         )
         return count > 0
 
+    def has_job_referencing_key(self, object_key: str) -> bool:
+        """Return True if any job is currently referencing this MinIO object key."""
+        count = (
+            self.session.query(AnalysisJobModel)
+            .filter(AnalysisJobModel.audio_object_key == object_key)
+            .count()
+        )
+        return count > 0
+
     def get_analytics_stats(self, owner_id: str | None = None) -> dict:
         # Query total jobs
         total_query = self.session.query(AnalysisResultModel).join(AnalysisJobModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
