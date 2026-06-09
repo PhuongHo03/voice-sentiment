@@ -23,7 +23,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
     empStats,
     empSessions,
     selectedSession,
-    setSelectedSession,
+    selectedSessionDetail,
+    isSessionDetailLoading,
+    handleSelectSession,
+    closeSelectedSession,
     isLoading,
     isDetailsLoading,
     error,
@@ -38,19 +41,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
     handleToggleStatus,
     handleChangeRole,
   } = useAdminDashboard();
-
-  // ── SVG donut helpers ──
-  const donutPos = empStats?.sentiment_distribution?.positive ?? selectedEmp?.sentiment_distribution?.positive ?? 0;
-  const donutNeu = empStats?.sentiment_distribution?.neutral ?? selectedEmp?.sentiment_distribution?.neutral ?? 0;
-  const donutNeg = empStats?.sentiment_distribution?.negative ?? selectedEmp?.sentiment_distribution?.negative ?? 0;
-  const donutTotal = donutPos + donutNeu + donutNeg;
-  const posPct = donutTotal ? (donutPos / donutTotal) * 100 : 0;
-  const neuPct = donutTotal ? (donutNeu / donutTotal) * 100 : 0;
-  const negPct = donutTotal ? (donutNeg / donutTotal) * 100 : 0;
-  const circ = 2 * Math.PI * 38;
-  const negOffset = 0;
-  const neuOffset = (donutNeg / donutTotal) * circ;
-  const posOffset = ((donutNeg + donutNeu) / donutTotal) * circ;
 
   // ── KPI ──
   const totalEmployeesCount = employees.length;
@@ -84,7 +74,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
           empStats={empStats}
           empSessions={empSessions}
           selectedSession={selectedSession}
-          setSelectedSession={setSelectedSession}
+          selectedSessionDetail={selectedSessionDetail}
+          isSessionDetailLoading={isSessionDetailLoading}
+          handleSelectSession={handleSelectSession}
+          closeSelectedSession={closeSelectedSession}
           isLoading={isLoading}
           isDetailsLoading={isDetailsLoading}
           error={error}
@@ -92,17 +85,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBackTo
           totalEmployeesCount={totalEmployeesCount}
           totalEmployeeJobs={totalEmployeeJobs}
           systemAvgScore={systemAvgScore}
-          donutPos={donutPos}
-          donutNeu={donutNeu}
-          donutNeg={donutNeg}
-          donutTotal={donutTotal}
-          posPct={posPct}
-          neuPct={neuPct}
-          negPct={negPct}
-          circ={circ}
-          negOffset={negOffset}
-          neuOffset={neuOffset}
-          posOffset={posOffset}
           currentUserId={user?.id}
           fetchEmployees={fetchEmployees}
         />

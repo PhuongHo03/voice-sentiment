@@ -1,4 +1,4 @@
-import type { JobStatus, MinioFile, SessionListResponse, UploadOnlyResult } from '../types/analysis';
+import type { JobStatus, MinioFile, SessionListResponse, UploadOnlyResult } from '../../../shared/types/analysis';
 
 export function buildAudioFormData(file: File): FormData {
   const data = new FormData();

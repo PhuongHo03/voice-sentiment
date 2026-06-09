@@ -21,9 +21,11 @@ import {
   resolveInitialActiveSessionId,
   type AnalysisView,
 } from '../states/analysisState';
-import type { JobStatus, MinioFile, SessionListItem, UploadOnlyResult } from '../types/analysis';
+import type { JobStatus, MinioFile, SessionListItem, UploadOnlyResult } from '../../../shared/types/analysis';
 
-export function useDashboardAnalysis(isAdmin: boolean = false) {
+const AUTH_REQUIRED_MESSAGE = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+
+export function useDashboardAnalysis(token: string | null, isAdmin: boolean = false) {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionDetail, setActiveSessionDetail] = useState<JobStatus | null>(null);
@@ -49,6 +51,13 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
 
+  function requireToken(): string {
+    if (!token) {
+      throw new Error(AUTH_REQUIRED_MESSAGE);
+    }
+    return token;
+  }
+
   // Helper to persist active session ID
   function setActiveSessionIdPersisted(id: string | null) {
     persistActiveSessionId(id);
@@ -65,7 +74,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
   async function loadStats() {
     setStatsLoading(true);
     try {
-      const data = await fetchStats();
+      const authToken = requireToken();
+      const data = await fetchStats(authToken);
       setStats(data);
     } catch (err) {
       console.error('Lỗi tải stats:', err);
@@ -79,7 +89,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     setFilesLoading(true);
     setFilesError(null);
     try {
-      const data = await listUserFiles();
+      const authToken = requireToken();
+      const data = await listUserFiles(authToken);
       setUserFiles(data.files);
     } catch (err) {
       console.error('Lỗi tải file từ MinIO:', err);
@@ -87,14 +98,15 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     } finally {
       setFilesLoading(false);
     }
-  }, []);
+  }, [token]);
 
   // 1. Fetch sessions list on mount
   useEffect(() => {
     async function loadSessions() {
       setSessionsLoading(true);
       try {
-        const response = await fetchSessions(50, 0);
+        const authToken = requireToken();
+        const response = await fetchSessions(50, 0, authToken);
         const sessionsData = response.sessions;
         setSessions(sessionsData);
         setActiveSessionId(resolveInitialActiveSessionId(
@@ -109,7 +121,7 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
       }
     }
     loadSessions();
-  }, []);
+  }, [token]);
 
   // 2. Fetch active session details when ID changes
   useEffect(() => {
@@ -122,7 +134,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     let isMounted = true;
     async function loadDetail() {
       try {
-        const detail = await getAnalysis(currentId as string);
+        const authToken = requireToken();
+        const detail = await getAnalysis(currentId as string, authToken);
         if (isMounted) {
           setActiveSessionDetail(detail);
         }
@@ -141,7 +154,7 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     return () => {
       isMounted = false;
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, token]);
 
   // 3. Polling active pending/processing sessions in background
   useEffect(() => {
@@ -155,7 +168,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
 
       runningIds.forEach(async (id) => {
         try {
-          const updated = await getAnalysis(id);
+          const authToken = requireToken();
+          const updated = await getAnalysis(id, authToken);
           
           // Update sessions list state
           setSessions(prev => {
@@ -208,7 +222,7 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     }, 2000);
 
     return () => clearInterval(timer);
-  }, [sessions, activeSessionId, activeView]);
+  }, [sessions, activeSessionId, activeView, token]);
 
   // Load stats when dashboard view is opened
   useEffect(() => {
@@ -218,11 +232,12 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     if (activeView === 'files') {
       loadUserFiles();
     }
-  }, [activeView]);
+  }, [activeView, token, loadUserFiles]);
 
   // Upload file to MinIO only (no analysis), then refresh file list
   async function handleUploadFileOnly(file: File): Promise<UploadOnlyResult> {
-    const result = await uploadFileOnly(file);
+    const authToken = requireToken();
+    const result = await uploadFileOnly(file, authToken);
     // Optimistically prepend the new file to the list so UI updates immediately
     setUserFiles(prev => [createUploadedFileItem(result), ...prev]);
     return result;
@@ -241,7 +256,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     setLoading(true);
     setError(null);
     try {
-      const job = await submitAudioFromKey(objectKey, fileName);
+      const authToken = requireToken();
+      const job = await submitAudioFromKey(objectKey, fileName, authToken);
 
       const newSessionItem: SessionListItem = {
         job_id: job.job_id,
@@ -269,13 +285,14 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     setLoading(true);
     setError(null);
     try {
+      const authToken = requireToken();
       // Step 1: upload-only to MinIO
-      const uploaded = await uploadFileOnly(file);
+      const uploaded = await uploadFileOnly(file, authToken);
       // Optimistically add to file list
       setUserFiles(prev => [createUploadedFileItem(uploaded), ...prev]);
 
       // Step 2: create analysis job from key
-      const job = await submitAudioFromKey(uploaded.object_key, file.name);
+      const job = await submitAudioFromKey(uploaded.object_key, file.name, authToken);
 
       const newSessionItem: SessionListItem = {
         job_id: job.job_id,
@@ -303,7 +320,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     setLoading(true);
     setError(null);
     try {
-      const job = await submitText(text);
+      const authToken = requireToken();
+      const job = await submitText(text, authToken);
       const snippet = text.slice(0, 60) + (text.length > 60 ? '...' : '');
       
       const newSessionItem: SessionListItem = {
@@ -330,7 +348,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
   async function handleSaveRename(id: string) {
     if (!editingName.trim()) return;
     try {
-      await renameSession(id, editingName.trim());
+      const authToken = requireToken();
+      await renameSession(id, editingName.trim(), authToken);
       setSessions(prev => prev.map(s => s.job_id === id ? { ...s, name: editingName.trim() } : s));
       if (activeSessionDetail?.job_id === id) {
         setActiveSessionDetail(prev => prev ? { ...prev, name: editingName.trim() } : null);
@@ -346,7 +365,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
     e.stopPropagation();
     if (!confirm('Bạn có chắc chắn muốn xóa session này cùng tất cả kết quả phân tích?')) return;
     try {
-      await deleteSession(id);
+      const authToken = requireToken();
+      await deleteSession(id, authToken);
       const updated = sessions.filter(s => s.job_id !== id);
       setSessions(updated);
       
@@ -371,7 +391,8 @@ export function useDashboardAnalysis(isAdmin: boolean = false) {
   async function handleDeleteUserFile(objectKey: string) {
     if (!confirm('Bạn có chắc chắn muốn xóa file này khỏi kho lưu trữ?')) return;
     try {
-      await deleteUserFile(objectKey);
+      const authToken = requireToken();
+      await deleteUserFile(objectKey, authToken);
       setUserFiles(prev => prev.filter(f => f.object_key !== objectKey));
     } catch (err) {
       alert('Không thể xóa file: ' + (err instanceof Error ? err.message : 'Lỗi không xác định'));

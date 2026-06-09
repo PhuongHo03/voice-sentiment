@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     llm_base_url: str
     llm_api_key: str
     llm_model: str
+    enable_detailed_summary: bool = True
+    llm_analysis_pipeline_version: str = "v2_structured_pipeline"
+    max_summary_topics: int = 8
+    max_action_items: int = 8
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

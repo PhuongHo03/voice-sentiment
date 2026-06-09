@@ -27,7 +27,11 @@ class SqlAlchemyAnalysisRepository:
                 sentiment_reason=result["sentiment_reason"],
                 confidence=result["confidence"],
                 agent_score=result.get("agent_score"),
-                agent_advice_json=result.get("agent_advice")
+                agent_advice_json=result.get("agent_advice"),
+                detailed_summary_json=result.get("detailed_summary"),
+                agent_score_breakdown_json=result.get("agent_score_breakdown"),
+                quality_notes_json=result.get("quality_notes"),
+                analysis_metadata_json=result.get("analysis_metadata"),
             )
             self.session.add(existing)
         else:
@@ -38,6 +42,10 @@ class SqlAlchemyAnalysisRepository:
             existing.confidence = result["confidence"]
             existing.agent_score = result.get("agent_score")
             existing.agent_advice_json = result.get("agent_advice")
+            existing.detailed_summary_json = result.get("detailed_summary")
+            existing.agent_score_breakdown_json = result.get("agent_score_breakdown")
+            existing.quality_notes_json = result.get("quality_notes")
+            existing.analysis_metadata_json = result.get("analysis_metadata")
             
         job.status = "completed"
         job.error_message = None

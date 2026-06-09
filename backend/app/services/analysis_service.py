@@ -152,6 +152,10 @@ class AnalysisService:
                 "confidence": result.confidence,
                 "agent_score": result.agent_score,
                 "agent_advice": result.agent_advice_json,
+                "detailed_summary": result.detailed_summary_json,
+                "agent_score_breakdown": result.agent_score_breakdown_json,
+                "quality_notes": result.quality_notes_json,
+                "analysis_metadata": result.analysis_metadata_json,
             }
         return {
             "job_id": str(job.id),

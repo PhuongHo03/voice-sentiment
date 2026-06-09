@@ -34,6 +34,17 @@ def get_employee_sessions(employee_id: str, db: Session = Depends(get_session), 
     return _admin_service(db).get_employee_sessions(employee_id)
 
 
+@router.get("/employees/{employee_id}/sessions/{job_id}")
+def get_employee_session_detail(
+    employee_id: str,
+    job_id: str,
+    db: Session = Depends(get_session),
+    current_admin: UserModel = Depends(require_admin),
+):
+    """Get full analysis detail for a specific employee session."""
+    return _admin_service(db).get_employee_session_detail(employee_id, job_id)
+
+
 @router.get("/users")
 def get_all_users(db: Session = Depends(get_session), current_admin: UserModel = Depends(require_admin)):
     """List all user accounts with their roles and activation status."""

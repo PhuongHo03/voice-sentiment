@@ -1,3 +1,5 @@
+import type { AgentScoreBreakdown, AnalysisMetadata, DetailedSummary } from '../../../shared/types/analysis';
+
 export interface Employee {
   id: string;
   username: string;
@@ -21,12 +23,17 @@ export interface EmployeeSession {
   name: string;
   status: string;
   input_type: string;
+  audio_object_key?: string | null;
   created_at: string;
   sentiment: string | null;
   confidence: number | null;
   agent_score: number | null;
   agent_advice: string[] | null;
   summary: string[] | null;
+  detailed_summary: DetailedSummary | null;
+  agent_score_breakdown: AgentScoreBreakdown | null;
+  quality_notes: string[] | null;
+  analysis_metadata: AnalysisMetadata | null;
   sentiment_reason: string | null;
   transcript: any | null;
 }

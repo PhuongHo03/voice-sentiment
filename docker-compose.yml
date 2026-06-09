@@ -19,7 +19,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_PROMETHEUS_AUTH_TYPE: public
+      MINIO_PROMETHEUS_AUTH_TYPE: ${MINIO_PROMETHEUS_AUTH_TYPE:-public}
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     expose:
       - "9000"
@@ -63,7 +63,7 @@ services:
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F"
       PROMETHEUS_URL: "http://prometheus:9090"
       MINIO_ENDPOINT: "minio:9000"
-      MINIO_SECURE: "false"
+      MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
@@ -162,7 +162,7 @@ services:
     image: oliver006/redis_exporter:v1.67.0
     restart: always
     environment:
-      REDIS_ADDR: redis://redis:6379
+      REDIS_ADDR: "redis://${REDIS_HOST:-redis}:6379"
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     depends_on:
       - redis
@@ -193,12 +193,13 @@ services:
     build: ./voice-worker
     environment:
       VOICE_LANGUAGE_CODE: ${VOICE_LANGUAGE_CODE:-vi-VN}
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
     restart: always
     expose:
       - "8000"
     volumes:
       - huggingface_cache:/root/.cache
+      - voice_models:/app/models
       - shared_logs:/app/logs
 
   llm-worker:
@@ -208,7 +209,7 @@ services:
       REDIS_URL: "redis://${REDIS_HOST:-redis}:6379/0"
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F"
       MINIO_ENDPOINT: "minio:9000"
-      MINIO_SECURE: "false"
+      MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
@@ -216,6 +217,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_MODEL: ${LLM_MODEL}
       LLM_API_KEY: ${LLM_API_KEY}
+      ENABLE_DETAILED_SUMMARY: ${ENABLE_DETAILED_SUMMARY:-true}
+      LLM_ANALYSIS_PIPELINE_VERSION: ${LLM_ANALYSIS_PIPELINE_VERSION:-v2_structured_pipeline}
+      MAX_SUMMARY_TOPICS: ${MAX_SUMMARY_TOPICS:-8}
+      MAX_ACTION_ITEMS: ${MAX_ACTION_ITEMS:-8}
       RABBITMQ_QUEUE_COUNT: ${RABBITMQ_QUEUE_COUNT:-1}
     restart: always
     expose:
@@ -256,4 +261,5 @@ volumes:
   prometheus_data:
   ollama_data:
   huggingface_cache:
+  voice_models:
   shared_logs:

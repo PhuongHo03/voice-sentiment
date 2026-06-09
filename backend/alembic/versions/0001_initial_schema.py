@@ -134,6 +134,10 @@ def upgrade() -> None:
         sa.Column('confidence', sa.Float(), nullable=False),
         sa.Column('agent_score', sa.Integer(), nullable=True),
         sa.Column('agent_advice_json', JSONB(), nullable=True),
+        sa.Column('detailed_summary_json', JSONB(), nullable=True),
+        sa.Column('agent_score_breakdown_json', JSONB(), nullable=True),
+        sa.Column('quality_notes_json', JSONB(), nullable=True),
+        sa.Column('analysis_metadata_json', JSONB(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )

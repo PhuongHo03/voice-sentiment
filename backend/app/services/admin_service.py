@@ -36,16 +36,29 @@ class AdminService:
                 "name": job.name,
                 "status": job.status,
                 "input_type": job.input_type,
+                "audio_object_key": job.audio_object_key,
                 "created_at": job.created_at,
                 "sentiment": result.sentiment if result else None,
                 "confidence": result.confidence if result else None,
                 "agent_score": result.agent_score if result else None,
                 "agent_advice": result.agent_advice_json if result else None,
                 "summary": result.summary_json if result else None,
+                "detailed_summary": result.detailed_summary_json if result else None,
+                "agent_score_breakdown": result.agent_score_breakdown_json if result else None,
+                "quality_notes": result.quality_notes_json if result else None,
+                "analysis_metadata": result.analysis_metadata_json if result else None,
                 "sentiment_reason": result.sentiment_reason if result else None,
                 "transcript": result.transcript_json if result else None,
             })
         return {"sessions": sessions_list}
+
+    def get_employee_session_detail(self, employee_id: str, job_id: str) -> dict:
+        self._require_employee(employee_id)
+        job = self.analysis_repository.get_job(job_id)
+        if not job or job.owner_id != employee_id:
+            raise HTTPException(status_code=404, detail="Analysis job not found for this employee")
+        result = self.analysis_repository.get_result(job_id)
+        return self._build_job_payload(job, result)
 
     def get_all_users(self) -> dict:
         result = []
@@ -129,6 +142,32 @@ class AdminService:
             "average_score": avg_score,
             "sentiment_distribution": sentiments,
             "created_at": emp.created_at,
+        }
+
+    def _build_job_payload(self, job, result) -> dict:
+        result_payload = None
+        if result:
+            result_payload = {
+                "transcript": result.transcript_json,
+                "summary": result.summary_json,
+                "sentiment": result.sentiment,
+                "sentiment_reason": result.sentiment_reason,
+                "confidence": result.confidence,
+                "agent_score": result.agent_score,
+                "agent_advice": result.agent_advice_json,
+                "detailed_summary": result.detailed_summary_json,
+                "agent_score_breakdown": result.agent_score_breakdown_json,
+                "quality_notes": result.quality_notes_json,
+                "analysis_metadata": result.analysis_metadata_json,
+            }
+        return {
+            "job_id": str(job.id),
+            "name": job.name,
+            "status": job.status,
+            "input_type": job.input_type,
+            "audio_object_key": job.audio_object_key,
+            "result": result_payload,
+            "error_message": job.error_message,
         }
 
     def _require_employee(self, employee_id: str) -> None:

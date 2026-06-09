@@ -7,6 +7,7 @@ import {
   parseEmployeesResponse,
 } from '../dtos/adminDto';
 import type { AccountUser, Employee, EmployeeSession, EmployeeStats } from '../types/admin';
+import type { JobStatus } from '../../../shared/types/analysis';
 
 function authHeaders(token: string): Record<string, string> {
   return { 'Authorization': `Bearer ${token}` };
@@ -22,6 +23,14 @@ export async function fetchEmployeeDetails(token: string, employeeId: string): P
   const sessionsData = sessionsRes.ok ? await sessionsRes.json() : null;
 
   return parseEmployeeDetailsResponse(stats, sessionsData);
+}
+
+export async function fetchEmployeeSessionDetail(token: string, employeeId: string, jobId: string): Promise<JobStatus> {
+  const response = await fetch(`/api/admin/employees/${employeeId}/sessions/${jobId}`, {
+    headers: authHeaders(token),
+  });
+  if (!response.ok) throw new Error('Không thể tải chi tiết phiên làm việc');
+  return response.json();
 }
 
 export async function fetchEmployeesRequest(token: string): Promise<Employee[]> {

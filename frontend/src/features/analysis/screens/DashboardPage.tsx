@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { AudioInputPanel } from '../components/audio/AudioInputPanel';
-import { SentimentBadge } from '../components/sentiment/SentimentBadge';
-import { SummaryCard } from '../components/summary/SummaryCard';
-import { TranscriptLog } from '../components/transcript/TranscriptLog';
+import { SessionDetailPanel } from '../../../shared/components/session/SessionDetailPanel';
+import { PerformanceDashboardPanel } from '../../../shared/components/performance/PerformanceDashboardPanel';
 import { useAuth } from '../../auth/states/AuthContext';
 import { useDashboardAnalysis } from '../hooks/useAnalysis';
 import { getFilePresignedUrl } from '../api/analysisApi';
 
 export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: boolean; onGoToAdmin?: () => void }) {
-  const { logout, user } = useAuth();
+  const { logout, user, token } = useAuth();
   const {
     sessions,
     activeSessionId,
@@ -40,7 +39,6 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
     handleDeleteSession,
     formatRelativeTime,
     formatFileSize,
-    getDominantSentiment,
     loadStats,
     // MinIO file management
     userFiles,
@@ -48,17 +46,27 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
     filesError,
     loadUserFiles,
     handleDeleteUserFile,
-  } = useDashboardAnalysis(isAdmin);
+  } = useDashboardAnalysis(token, isAdmin);
 
   // Audio preview state for the Files view
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const token = localStorage.getItem('voice_sentiment_token') ?? '';
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
   const sessionAudioUrl = activeSessionDetail?.audio_object_key
-    ? `${apiBaseUrl}/api/files/stream?object_key=${encodeURIComponent(activeSessionDetail.audio_object_key)}&token=${encodeURIComponent(token)}`
+    ? `${apiBaseUrl}/api/files/stream?object_key=${encodeURIComponent(activeSessionDetail.audio_object_key)}&token=${encodeURIComponent(token ?? '')}`
+    : null;
+  const activeSessionViewModel = activeSessionDetail
+    ? {
+        jobId: activeSessionDetail.job_id,
+        name: activeSessionDetail.name,
+        status: activeSessionDetail.status,
+        inputType: activeSessionDetail.input_type,
+        errorMessage: activeSessionDetail.error_message,
+        audioUrl: sessionAudioUrl,
+        result: activeSessionDetail.result,
+      }
     : null;
 
   async function handlePreviewFile(objectKey: string) {
@@ -69,7 +77,7 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
     }
     setPreviewLoading(true);
     try {
-      const url = await getFilePresignedUrl(objectKey);
+      const url = getFilePresignedUrl(objectKey, token);
       setPreviewUrl(url);
       setPreviewKey(objectKey);
     } catch (e) {
@@ -78,33 +86,6 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
       setPreviewLoading(false);
     }
   }
-
-  // Pre-calculate SVG Donut Chart lengths
-  const donutPos = stats?.sentiment_distribution?.positive || 0;
-  const donutNeu = stats?.sentiment_distribution?.neutral || 0;
-  const donutNeg = stats?.sentiment_distribution?.negative || 0;
-  const donutTotal = donutPos + donutNeu + donutNeg;
-  
-  const posPct = donutTotal ? (donutPos / donutTotal) * 100 : 0;
-  const neuPct = donutTotal ? (donutNeu / donutTotal) * 100 : 0;
-  const negPct = donutTotal ? (donutNeg / donutTotal) * 100 : 0;
-  
-  const circ = 251.3; // 2 * PI * r (r=40)
-  const posLen = (posPct / 100) * circ;
-  const neuLen = (neuPct / 100) * circ;
-  const negLen = (negPct / 100) * circ;
-
-  const posStart = 0;
-  const neuStart = posLen;
-  const negStart = posLen + neuLen;
-
-  const posOffset = -posStart;
-  const neuOffset = -neuStart;
-  const negOffset = -negStart;
-
-  // Pre-calculate SVG Bar Chart scaling
-  const trendsList = stats?.weekly_trends || [];
-  const maxTrendCount = Math.max(...trendsList.map((t: any) => t.count), 1);
 
   return (
     <div className="app-layout-shell">
@@ -480,237 +461,15 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
             {activeView === 'dashboard' ? (
               /* DASHBOARD VIEW PANEL */
               <div className="dashboard-view-container">
-                {statsLoading && !stats ? (
-                  <div className="session-status-progress">
-                    <div className="session-progress-spinner"></div>
-                    <div className="session-progress-text">Đang tải báo cáo thống kê tổng hợp...</div>
-                  </div>
-                ) : (
-                  <>
-                    {/* KPI Cards Grid */}
-                    <div className="stats-grid">
-                      <div className="metric-card primary">
-                        <span className="metric-label">Tổng số cuộc phân tích</span>
-                        <span className="metric-value">{stats?.total_jobs ?? 0}</span>
-                        <div className="metric-subtext">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                          Phiên hoàn thành trong hệ thống
-                        </div>
-                      </div>
-                      <div className="metric-card success">
-                        <span className="metric-label">Độ tin cậy trung bình</span>
-                        <span className="metric-value">
-                          {stats?.total_jobs ? `${Math.round((stats?.average_confidence ?? 0) * 100)}%` : '0%'}
-                        </span>
-                        <div className="metric-subtext">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                          Mức độ tự tin trung bình của LLM
-                        </div>
-                      </div>
-                      <div className="metric-card warning">
-                        <span className="metric-label">Điểm nhân viên trung bình</span>
-                        <span className="metric-value">
-                          {stats?.total_jobs ? `${stats?.average_agent_score ?? 0}` : '0'}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/100</span>
-                        </span>
-                        <div className="metric-subtext">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
-                          Đánh giá chất lượng hỗ trợ
-                        </div>
-                      </div>
-                      <div className="metric-card info">
-                        <span className="metric-label">Sắc thái chủ đạo</span>
-                        <span className="metric-value">
-                          {getDominantSentiment(stats?.sentiment_distribution)}
-                        </span>
-                        <div className="metric-subtext">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-                          Sắc thái có tần suất cao nhất
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Interactive SVG Charts Grid */}
-                    <div className="charts-grid">
-                      {/* Donut Chart Card */}
-                      <div className="chart-card">
-                        <h3>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v10l8.5 6"></path></svg>
-                          Tỉ lệ Phân bố Sắc thái (Sentiment Ratio)
-                        </h3>
-                        <div className="chart-card-content">
-                          {donutTotal > 0 ? (
-                            <div className="donut-svg-container">
-                              <svg width="160" height="160" viewBox="0 0 100 100">
-                                {/* Base background ring */}
-                                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="12" />
-                                
-                                {/* Negative arc segment */}
-                                {donutNeg > 0 && (
-                                  <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="40"
-                                    fill="none"
-                                    stroke="var(--color-rose)"
-                                    strokeWidth="12"
-                                    strokeDasharray={`${negLen} ${circ}`}
-                                    strokeDashoffset={negOffset}
-                                    transform="rotate(-90 50 50)"
-                                    className="donut-chart-circle"
-                                    style={{ '--glow-color': 'rgba(244,63,94,0.4)' } as any}
-                                  />
-                                )}
-                                
-                                {/* Neutral arc segment */}
-                                {donutNeu > 0 && (
-                                  <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="40"
-                                    fill="none"
-                                    stroke="var(--color-blue)"
-                                    strokeWidth="12"
-                                    strokeDasharray={`${neuLen} ${circ}`}
-                                    strokeDashoffset={neuOffset}
-                                    transform="rotate(-90 50 50)"
-                                    className="donut-chart-circle"
-                                    style={{ '--glow-color': 'rgba(59,130,246,0.4)' } as any}
-                                  />
-                                )}
-                                
-                                {/* Positive arc segment */}
-                                {donutPos > 0 && (
-                                  <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="40"
-                                    fill="none"
-                                    stroke="var(--color-teal)"
-                                    strokeWidth="12"
-                                    strokeDasharray={`${posLen} ${circ}`}
-                                    strokeDashoffset={posOffset}
-                                    transform="rotate(-90 50 50)"
-                                    className="donut-chart-circle"
-                                    style={{ '--glow-color': 'rgba(16,185,129,0.4)' } as any}
-                                  />
-                                )}
-
-                                {/* Central text labels */}
-                                <text className="donut-center-text" x="50" y="47" fontSize="13" fontWeight="800">
-                                  {donutTotal}
-                                </text>
-                                <text className="donut-center-text" x="50" y="60" fontSize="7" fontWeight="600" fill="var(--text-secondary)">
-                                  SESSIONS
-                                </text>
-                              </svg>
-                              
-                              <div className="donut-legend">
-                                <div className="donut-legend-item">
-                                  <span className="legend-color-box positive" />
-                                  <span>Tích cực: <strong>{donutPos}</strong> ({Math.round(posPct)}%)</span>
-                                </div>
-                                <div className="donut-legend-item">
-                                  <span className="legend-color-box neutral" />
-                                  <span>Trung lập: <strong>{donutNeu}</strong> ({Math.round(neuPct)}%)</span>
-                                </div>
-                                <div className="donut-legend-item">
-                                  <span className="legend-color-box negative" />
-                                  <span>Tiêu cực: <strong>{donutNeg}</strong> ({Math.round(negPct)}%)</span>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Chưa có dữ liệu phân tích</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Weekly Trend Bar Chart Card */}
-                      <div className="chart-card">
-                        <h3>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                          Xu hướng cuộc gọi trong tuần (Weekly Trends)
-                        </h3>
-                        <div className="chart-card-content" style={{ display: 'block' }}>
-                          {trendsList.length > 0 ? (
-                            <div className="bar-chart-container">
-                              <svg className="bar-svg" viewBox="0 0 450 200">
-                                <defs>
-                                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#c084fc" stopOpacity="0.8" />
-                                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.3" />
-                                  </linearGradient>
-                                </defs>
-                                
-                                {/* Grid lines */}
-                                <line x1="30" y1="20" x2="430" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                                <line x1="30" y1="70" x2="430" y2="70" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                                <line x1="30" y1="120" x2="430" y2="120" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                                <line x1="30" y1="170" x2="430" y2="170" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-
-                                {/* Render bars */}
-                                {trendsList.map((item: any, idx: number) => {
-                                  const x = 50 + idx * 55;
-                                  const barMaxHeight = 135;
-                                  const barHeight = (item.count / maxTrendCount) * barMaxHeight;
-                                  const y = 170 - barHeight;
-                                  
-                                  // Short date formatting (e.g. 26/05)
-                                  let shortDate = item.date;
-                                  try {
-                                    const parts = item.date.split('-');
-                                    shortDate = `${parts[2]}/${parts[1]}`;
-                                  } catch (e) {}
-
-                                  return (
-                                    <g key={item.date}>
-                                      {/* Interactive Bar */}
-                                      <rect
-                                        className="chart-bar-rect"
-                                        x={x}
-                                        y={y}
-                                        width="32"
-                                        height={barHeight}
-                                        rx="4"
-                                      />
-                                      {/* Bar Count Top Label */}
-                                      <text
-                                        x={x + 16}
-                                        y={y - 6}
-                                        textAnchor="middle"
-                                        fill="#fff"
-                                        fontSize="9"
-                                        fontWeight="700"
-                                        opacity={item.count > 0 ? 1 : 0.2}
-                                      >
-                                        {item.count}
-                                      </text>
-                                      {/* X Axis Date Label */}
-                                      <text
-                                        x={x + 16}
-                                        y="188"
-                                        textAnchor="middle"
-                                        fill="var(--text-secondary)"
-                                        fontSize="9"
-                                        fontWeight="500"
-                                      >
-                                        {shortDate}
-                                      </text>
-                                    </g>
-                                  );
-                                })}
-                              </svg>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                              Không có dữ liệu xu hướng
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
+                <PerformanceDashboardPanel
+                  stats={stats}
+                  sessions={sessions}
+                  loading={statsLoading && !stats}
+                  onSessionClick={(session) => {
+                    setActiveSessionIdPersisted(session.job_id);
+                    setActiveViewPersisted('session');
+                  }}
+                />
               </div>
             ) : activeView === 'files' ? (
               /* FILES VIEW PANEL */
@@ -897,158 +656,14 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    /* Completed: Stack remaining results in a centered readable flow */
-                    <>
-                      <div className="status-header" style={{ width: '100%', boxSizing: 'border-box' }}>
-                        <div className="status-title-section">
-                          <span className="status-label">Tiến độ Job:</span>
-                          <div className="status-badge completed">
-                            <span className="status-indicator-dot"></span>
-                            Đã hoàn thành
-                          </div>
-                        </div>
-                        <div className="job-id-tag">
-                          Job ID: <code>{activeSessionDetail.job_id}</code>
-                        </div>
-                      </div>
-
-                      {error && <div className="error-panel" style={{ width: '100%', boxSizing: 'border-box' }}>{error}</div>}
-
-                      {/* AI Agent Scorecard (if completed and has agent_score) */}
-                      {activeSessionDetail.result?.agent_score !== undefined && activeSessionDetail.result?.agent_score !== null && (
-                        <div className="agent-scorecard-card">
-                          <div className="agent-scorecard-layout">
-                            <div className="agent-score-ring-container">
-                              <div className="agent-score-ring-svg">
-                                <svg width="150" height="150" viewBox="0 0 100 100">
-                                  <circle className="ring-bg" cx="50" cy="50" r="42" />
-                                  <circle 
-                                    className="ring-progress" 
-                                    cx="50" 
-                                    cy="50" 
-                                    r="42" 
-                                    stroke={
-                                      activeSessionDetail.result.agent_score >= 80 ? '#10b981' :
-                                      activeSessionDetail.result.agent_score >= 50 ? '#3b82f6' : '#ef4444'
-                                    }
-                                    strokeDasharray="263.9" 
-                                    strokeDashoffset={263.9 - (activeSessionDetail.result.agent_score / 100) * 263.9} 
-                                    style={{ filter: `drop-shadow(0 0 6px ${
-                                      activeSessionDetail.result.agent_score >= 80 ? 'rgba(16,185,129,0.5)' :
-                                      activeSessionDetail.result.agent_score >= 50 ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)'
-                                    })` }}
-                                  />
-                                </svg>
-                                <div className="agent-score-text">
-                                  <span className="agent-score-number">{activeSessionDetail.result.agent_score}</span>
-                                  <span className="agent-score-label">Điểm số</span>
-                                </div>
-                              </div>
-                              <div className="agent-status-label" style={{
-                                color: activeSessionDetail.result.agent_score >= 80 ? '#10b981' :
-                                       activeSessionDetail.result.agent_score >= 50 ? '#3b82f6' : '#ef4444'
-                              }}>
-                                {activeSessionDetail.result.agent_score >= 80 ? 'Xuất sắc' :
-                                 activeSessionDetail.result.agent_score >= 50 ? 'Đạt yêu cầu' : 'Cần cải thiện'}
-                              </div>
-                            </div>
-                            <div className="agent-advice-panel">
-                              <div className="agent-advice-title">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="advice-icon"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
-                                Đánh giá & Khuyến nghị của AI cho Nhân viên
-                              </div>
-                              <div className="advice-list">
-                                {activeSessionDetail.result.agent_advice && activeSessionDetail.result.agent_advice.length > 0 ? (
-                                  activeSessionDetail.result.agent_advice.map((adv, idx) => (
-                                    <div key={idx} className="advice-item">
-                                      <span className="advice-icon">💡</span>
-                                      <span>{adv}</span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="advice-item">
-                                    <span className="advice-icon">💡</span>
-                                    <span>Hội thoại diễn ra tốt đẹp, nhân viên ứng xử đúng mực và hỗ trợ khách hàng hiệu quả.</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sentiment Badge (Top) */}
-                      <SentimentBadge
-                        sentiment={activeSessionDetail.result?.sentiment}
-                        reason={activeSessionDetail.result?.sentiment_reason}
-                        confidence={activeSessionDetail.result?.confidence}
-                      />
-
-                      {/* Summary Card (Middle) */}
-                      <SummaryCard items={activeSessionDetail.result?.summary ?? []} />
-
-                      {/* Premium Call Playback Center (New) */}
-                      {sessionAudioUrl && (
-                        <div className="card shadow-animated" style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '12px',
-                          background: 'linear-gradient(135deg, rgba(31,41,55,0.4) 0%, rgba(17,24,39,0.6) 100%)',
-                          border: '1px solid rgba(16,185,129,0.15)',
-                          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-                          borderRadius: '16px',
-                          padding: '16px 20px',
-                          transition: 'all 0.3s ease',
-                          marginTop: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '36px',
-                              height: '36px',
-                              borderRadius: '50%',
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid rgba(16, 185, 129, 0.25)',
-                              color: '#10b981',
-                              animation: 'pulse-glow 2s infinite'
-                            }}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>Nghe lại ghi âm cuộc hội thoại</span>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Vừa phát ghi âm vừa đối chiếu nhanh với nội dung Transcript bên dưới</span>
-                            </div>
-                          </div>
-                          <div style={{ width: '100%', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <audio
-                              controls
-                              src={sessionAudioUrl}
-                              style={{ width: '100%', height: '40px', accentColor: '#10b981' }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Transcript Log (Bottom) */}
-                      <TranscriptLog turns={activeSessionDetail.result?.transcript ?? []} />
-
-                      {/* Completed banner and new session button */}
-                      <div className="session-completed-banner" style={{ width: '100%', boxSizing: 'border-box', marginTop: '8px' }}>
-                        <span className="session-completed-text">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-teal)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                          Phân tích hoàn tất! Hãy tạo mới session để nhận job phân tích tiếp theo.
-                        </span>
-                        <button className="session-completed-btn" onClick={handleCreateNewSession}>
-                          Tạo session mới
-                        </button>
-                      </div>
-                    </>
-                  )}
+                  ) : activeSessionViewModel ? (
+                    <SessionDetailPanel
+                      session={activeSessionViewModel}
+                      variant="inline"
+                      error={error}
+                      onCreateNewSession={handleCreateNewSession}
+                    />
+                  ) : null}
                 </div>
               </main>
             )}

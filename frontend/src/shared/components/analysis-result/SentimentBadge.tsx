@@ -1,4 +1,4 @@
-export function SentimentBadge({ sentiment, reason, confidence }: { sentiment?: string; reason?: string; confidence?: number }) {
+export function SentimentBadge({ sentiment, reason, confidence }: { sentiment?: string; reason?: string; confidence?: number | null }) {
   const s = (sentiment || '').toLowerCase();
   const icon = s === 'negative' ? '😡' : s === 'positive' ? '😊' : '😐';
   const label = s === 'positive' ? 'Tích cực' : s === 'negative' ? 'Tiêu cực' : s === 'neutral' ? 'Trung lập' : 'Chờ...';
@@ -6,8 +6,10 @@ export function SentimentBadge({ sentiment, reason, confidence }: { sentiment?: 
     <section className="card">
       <h2>Sắc thái cuộc gọi</h2>
       <div className={`sentiment ${s || 'neutral'}`}>{icon} {label}</div>
-      {reason && <p style={{ marginTop: '12px' }}>{reason}</p>}
-      {confidence !== undefined && <small>Độ tin cậy: {Math.round(confidence * 100)}%</small>}
+      <p style={{ marginTop: '12px' }}>{reason || 'Chưa có phân tích sắc thái.'}</p>
+      <small>
+        Độ tin cậy: {confidence !== undefined && confidence !== null ? `${Math.round(confidence * 100)}%` : 'Chưa có'}
+      </small>
     </section>
   );
 }

@@ -4,7 +4,7 @@ import { DashboardPage } from '../features/analysis/screens/DashboardPage';
 import { LoginPage } from '../features/auth/screens/LoginPage';
 import { RegisterPage } from '../features/auth/screens/RegisterPage';
 import { AdminDashboardPage } from '../features/admin/screens/AdminDashboardPage';
-import '../styles/main.css';
+import '../shared/styles/main.css';
 
 function AppContent() {
   const { user, isLoading } = useAuth();

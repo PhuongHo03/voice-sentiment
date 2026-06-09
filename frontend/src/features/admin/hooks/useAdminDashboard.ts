@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/states/AuthContext';
 import {
   fetchAccountsRequest,
   fetchEmployeeDetails,
+  fetchEmployeeSessionDetail,
   fetchEmployeesRequest,
   updateUserRoleRequest,
   updateUserStatusRequest,
@@ -17,6 +18,7 @@ import {
   type ToastMessage,
 } from '../states/adminState';
 import type { Employee, EmployeeStats, EmployeeSession, AccountUser } from '../types/admin';
+import type { JobStatus } from '../../../shared/types/analysis';
 
 export function useAdminDashboard() {
   const { token, logout, user } = useAuth();
@@ -40,6 +42,8 @@ export function useAdminDashboard() {
   const [empStats, setEmpStats] = useState<EmployeeStats | null>(null);
   const [empSessions, setEmpSessions] = useState<EmployeeSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<EmployeeSession | null>(null);
+  const [selectedSessionDetail, setSelectedSessionDetail] = useState<JobStatus | null>(null);
+  const [isSessionDetailLoading, setIsSessionDetailLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +65,7 @@ export function useAdminDashboard() {
   const handleSelectEmployee = useCallback(async (emp: Employee, skipPushState: boolean = false) => {
     setSelectedEmp(emp);
     setSelectedSession(null);
+    setSelectedSessionDetail(null);
     setIsDetailsLoading(true);
     setEmpStats(null);
     setEmpSessions([]);
@@ -107,6 +112,7 @@ export function useAdminDashboard() {
           // If no ID is present, close the detail panel
           setSelectedEmp(null);
           setSelectedSession(null);
+          setSelectedSessionDetail(null);
         }
       }
     };
@@ -150,6 +156,27 @@ export function useAdminDashboard() {
       setIsLoading(false);
     }
   }, [token, handleSelectEmployee]);
+
+  const handleSelectSession = useCallback(async (session: EmployeeSession) => {
+    if (!selectedEmp) return;
+    setSelectedSession(session);
+    setSelectedSessionDetail(null);
+    setIsSessionDetailLoading(true);
+    try {
+      const detail = await fetchEmployeeSessionDetail(token!, selectedEmp.id, session.job_id);
+      setSelectedSessionDetail(detail);
+    } catch (err) {
+      console.error('Failed to load employee session detail:', err);
+    } finally {
+      setIsSessionDetailLoading(false);
+    }
+  }, [token, selectedEmp]);
+
+  const closeSelectedSession = useCallback(() => {
+    setSelectedSession(null);
+    setSelectedSessionDetail(null);
+    setIsSessionDetailLoading(false);
+  }, []);
 
   // ── Fetch all accounts ──
   const fetchAccounts = useCallback(async () => {
@@ -215,6 +242,11 @@ export function useAdminDashboard() {
     empSessions,
     selectedSession,
     setSelectedSession,
+    selectedSessionDetail,
+    setSelectedSessionDetail,
+    isSessionDetailLoading,
+    handleSelectSession,
+    closeSelectedSession,
     isLoading,
     isDetailsLoading,
     error,

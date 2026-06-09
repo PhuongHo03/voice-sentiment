@@ -1,4 +1,4 @@
-import type { MinioFile, SessionListItem, UploadOnlyResult } from '../types/analysis';
+import type { MinioFile, SessionListItem, UploadOnlyResult } from '../../../shared/types/analysis';
 
 export type AnalysisView = 'session' | 'dashboard' | 'files';
 
