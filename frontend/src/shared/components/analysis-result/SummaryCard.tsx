@@ -38,6 +38,11 @@ function PriorityBadge({ value }: { value: string }) {
   return <span className={`summary-priority ${normalized || 'medium'}`}>{label}</span>;
 }
 
+function normalizeCriterionScore(score: number, max: number): number {
+  if (!max || max <= 0) return 0;
+  return Math.round((score / max) * 100);
+}
+
 export function SummaryCard({ items, detailedSummary, scoreBreakdown, qualityNotes }: SummaryCardProps) {
   const safeItems = normalizeList(items);
   const normalizedSummary: DetailedSummary = {
@@ -139,7 +144,7 @@ export function SummaryCard({ items, detailedSummary, scoreBreakdown, qualityNot
               {criteria.map(([key, item]) => (
                 <div className="score-breakdown-row" key={key}>
                   <span>{item.label}</span>
-                  <strong>{item.score}/{item.max}</strong>
+                  <strong>{normalizeCriterionScore(item.score, item.max)}</strong>
                 </div>
               ))}
             </div>
