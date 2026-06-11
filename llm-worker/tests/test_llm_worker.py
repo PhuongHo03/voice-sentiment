@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 from app.configs.queue import RabbitMqAnalysisConsumer
+from app.ai.llm_client import LlmTextAnalyticsClient
 
 @patch("app.configs.queue.pika.BlockingConnection")
 @patch("app.configs.queue.SessionLocal")
@@ -55,3 +56,45 @@ def test_rabbitmq_consumer_start_and_handling(mock_analyze_job_class, mock_sessi
     # Verify execution of use case and message acknowledgment
     mock_use_case.execute.assert_called_once_with(message_payload)
     mock_channel.basic_ack.assert_called_once_with(delivery_tag=999)
+
+
+def test_call_llm_json_repairs_malformed_json_once():
+    client = LlmTextAnalyticsClient()
+    malformed = '{"summary": ["ok"] "sentiment": "neutral"}'
+    repaired = '{"summary": ["ok"], "sentiment": "neutral"}'
+
+    with patch.object(client, "_call_llm", side_effect=[malformed, repaired]) as mock_call:
+        result = client._call_llm_json("http://llm/v1", "return json")
+
+    assert result == {"summary": ["ok"], "sentiment": "neutral"}
+    assert mock_call.call_count == 2
+    assert mock_call.call_args_list[0].kwargs["json_mode"] is True
+    assert mock_call.call_args_list[1].kwargs["json_mode"] is True
+
+
+def test_parse_json_object_extracts_object_from_markdown():
+    client = LlmTextAnalyticsClient()
+
+    result = client._parse_json_object('```json\n{"agent_score": 80}\n```')
+
+    assert result == {"agent_score": 80}
+
+
+def test_call_llm_falls_back_from_api_to_local_provider():
+    client = LlmTextAnalyticsClient()
+    providers = [
+        {"name": "LLM_API", "base_url": "http://api/v1", "model": "remote-model", "api_key": "key"},
+        {"name": "LLM_LOCAL", "base_url": "http://ollama:11434/v1", "model": "local-model", "api_key": ""},
+    ]
+
+    with patch.object(client, "_llm_providers", return_value=providers), patch.object(
+        client,
+        "_call_llm_provider",
+        side_effect=[RuntimeError("timed out after 300s"), '{"ok": true}'],
+    ) as mock_provider:
+        result = client._call_llm("provider-chain", "prompt", json_mode=True)
+
+    assert result == '{"ok": true}'
+    assert mock_provider.call_count == 2
+    assert mock_provider.call_args_list[0].args[0]["name"] == "LLM_API"
+    assert mock_provider.call_args_list[1].args[0]["name"] == "LLM_LOCAL"

@@ -11,6 +11,7 @@ from app.controllers.health_controller import router as health_router
 from app.controllers.auth_controller import router as auth_router
 from app.controllers.admin_controller import router as admin_router
 from app.controllers.files_controller import router as files_router
+from app.services.job_recovery_service import start_stuck_job_recovery_loop
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def startup() -> None:
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations applied successfully!")
+        start_stuck_job_recovery_loop()
     except Exception as exc:
         logger.error(f"Failed to apply database migrations: {str(exc)}")
         raise
-

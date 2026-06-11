@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,36 @@ class SqlAlchemyAnalysisRepository:
 
     def get_result(self, job_id: str) -> AnalysisResultModel | None:
         return self.session.query(AnalysisResultModel).filter_by(job_id=job_id).one_or_none()
+
+    def get_stuck_processing_jobs(self, stale_after_seconds: int, max_attempts: int, limit: int = 50) -> list[AnalysisJobModel]:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+        return (
+            self.session.query(AnalysisJobModel)
+            .outerjoin(AnalysisResultModel, AnalysisJobModel.id == AnalysisResultModel.job_id)
+            .filter(
+                AnalysisJobModel.status == "processing",
+                AnalysisResultModel.id.is_(None),
+                AnalysisJobModel.attempt_count < max_attempts,
+                func.coalesce(AnalysisJobModel.last_heartbeat_at, AnalysisJobModel.started_at, AnalysisJobModel.updated_at) < cutoff,
+            )
+            .order_by(AnalysisJobModel.updated_at.asc())
+            .limit(limit)
+            .all()
+        )
+
+    def reset_job_for_retry(self, job_id: str) -> AnalysisJobModel | None:
+        job = self.get_job(job_id)
+        if not job:
+            return None
+        job.status = "pending"
+        job.error_message = None
+        job.started_at = None
+        job.last_heartbeat_at = None
+        job.completed_at = None
+        job.failed_at = None
+        self.session.commit()
+        self.session.refresh(job)
+        return job
 
     def list_jobs(self, limit: int = 20, offset: int = 0, owner_id: str | None = None) -> list[tuple[AnalysisJobModel, AnalysisResultModel | None]]:
         # Perform a left outer join to get jobs with their results

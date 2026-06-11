@@ -29,13 +29,21 @@ class Settings(BaseSettings):
     minio_bucket: str = "voice-audio"
     minio_secure: bool = False
     voice_server_url: str  # URL to connect to the voice-worker API (e.g. http://voice-worker:8000)
-    llm_base_url: str
-    llm_api_key: str
-    llm_model: str
+    llm_api_base_url: str = ""
+    llm_api_model: str = ""
+    llm_api_key: str = ""
+    llm_local_base_url: str = "http://ollama:11434/v1"
+    llm_local_model: str = "qwen2.5:1.5b"
+    llm_local_api_key: str = ""
+    # Backward-compatible fallback for older .env files.
+    llm_base_url: str = ""
+    llm_model: str = ""
     enable_detailed_summary: bool = True
     llm_analysis_pipeline_version: str = "v2_structured_pipeline"
     max_summary_topics: int = 8
     max_action_items: int = 8
+    llm_api_timeout_seconds: float = 300.0
+    voice_transcription_timeout_seconds: float = 1800.0
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

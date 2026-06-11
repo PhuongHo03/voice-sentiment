@@ -119,6 +119,9 @@ _SCORE_CRITERIA = {
 
 
 class LlmTextAnalyticsClient:
+    def __init__(self) -> None:
+        self._last_provider: dict | None = None
+
     def analyze(self, transcript: list[dict]) -> dict:
         """
         Analyzes the transcript turns using a remote LLM service.
@@ -283,8 +286,7 @@ class LlmTextAnalyticsClient:
         llm_mapping_ok = False
 
         try:
-            role_response = self._call_llm(base_url, role_map_prompt)
-            parsed = json.loads(role_response)
+            parsed = self._call_llm_json(base_url, role_map_prompt)
 
             candidate: dict[str, str] = {}
             for spk in speaker_ids:
@@ -387,22 +389,23 @@ class LlmTextAnalyticsClient:
             "  * Sắc thái Trung lập (Neutral): Điểm nhân viên nên nằm trong khoảng 70 - 85, trừ khi nhân viên làm việc xuất sắc (90+) hoặc tệ hại (dưới 50). Không cho 0 hay 100 điểm một cách vô lý.\n"
             "  * Sắc thái Tiêu cực (Negative): Nếu khách hàng giận dữ về sản phẩm nhưng Nhân viên vẫn lịch sự, bình tĩnh hỗ trợ đúng quy trình, điểm của nhân viên vẫn phải ở mức Khá (70 - 85). Không đánh giá 0 điểm trừ khi nhân viên thô lỗ, cãi cọ hoặc phớt lờ khách hàng.\n"
             "  * Sắc thái Tích cực (Positive): Điểm nhân viên xứng đáng ở mức 80 - 100.\n\n"
-            "Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ với định dạng chính xác như sau (không kèm markdown, không kèm giải thích ngoài lề):\n"
+            "Allowed values: sentiment chỉ được là một trong các giá trị positive, neutral, negative. "
+            "speaker_labels là mảng có đúng một nhãn cho mỗi Index, mỗi nhãn chỉ được là Khách hàng hoặc Nhân viên.\n"
+            "Hãy trả về DUY NHẤT một JSON hợp lệ với định dạng chính xác như ví dụ sau (không kèm markdown, không kèm giải thích ngoài lề):\n"
             "{\n"
             '  "summary": ["tóm tắt ý 1", "tóm tắt ý 2"],\n'
-            '  "sentiment": "positive" | "neutral" | "negative",\n'
+            '  "sentiment": "neutral",\n'
             '  "sentiment_reason": "lý do cụ thể bằng tiếng Việt",\n'
             '  "confidence": 0.95,\n'
             '  "agent_score": 85,\n'
             '  "agent_advice": ["lời khuyên 1", "lời khuyên 2"],\n'
-            '  "speaker_labels": ["vai trò của Index 0", "vai trò của Index 1", ...]\n'
+            '  "speaker_labels": ["Khách hàng", "Nhân viên"]\n'
             "}\n\n"
             f"Transcript:\n{transcript_text}"
         )
  
         base_url = self._get_base_url()
-        content = self._call_llm(base_url, prompt)
-        data = json.loads(content)
+        data = self._call_llm_json(base_url, prompt)
  
         labels = data.get("speaker_labels", [])
         corrected_transcript = []
@@ -483,8 +486,7 @@ class LlmTextAnalyticsClient:
             f"Transcript:\n{transcript_text}"
         )
         try:
-            content = self._call_llm(base_url, prompt)
-            data = self._parse_json_object(content)
+            data = self._call_llm_json(base_url, prompt)
             labels = data.get("speaker_labels", [])
         except Exception as exc:
             logger.warning(f"Semantic role refinement failed: {exc}. Keeping existing speaker labels.")
@@ -570,9 +572,10 @@ class LlmTextAnalyticsClient:
             "  * Gán điểm mặc định là 50 nếu sắc thái cuộc gọi là Tiêu cực, tuyệt đối không đánh giá 0 hoặc 100 tùy tiện.\n"
             "- Nếu cuộc gọi có đầy đủ tương tác, điểm phải phản ánh cách Nhân viên xử lý, không chỉ phản ánh tâm trạng Khách hàng.\n\n"
             "Trả về DUY NHẤT JSON hợp lệ:\n"
+            "Allowed values: sentiment chỉ được là positive, neutral hoặc negative.\n"
             "{\n"
             '  "summary": ["tóm tắt ý 1", "tóm tắt ý 2"],\n'
-            '  "sentiment": "positive" | "neutral" | "negative",\n'
+            '  "sentiment": "neutral",\n'
             '  "sentiment_reason": "lý do cụ thể bằng tiếng Việt",\n'
             '  "confidence": 0.95,\n'
             '  "agent_score": 85,\n'
@@ -582,8 +585,7 @@ class LlmTextAnalyticsClient:
         )
 
         try:
-            analysis_response = self._call_llm(base_url, analysis_prompt)
-            data = self._parse_json_object(analysis_response)
+            data = self._call_llm_json(base_url, analysis_prompt)
         except Exception as e:
             logger.error(f"Legacy sentiment analysis LLM call failed: {e}")
             data = {}
@@ -641,18 +643,23 @@ class LlmTextAnalyticsClient:
             "- Nếu deadline/owner không rõ, dùng null hoặc 'Chưa xác định'.\n"
             "- evidence_turns là danh sách Index có trong transcript, giữ nguyên số Index gốc.\n"
             "- Phân biệt rõ: Nhân viên là người hỏi/xác minh/hướng dẫn; Khách hàng là người trả lời thông tin, đồng ý/từ chối/hỏi lại.\n\n"
+            "Allowed values:\n"
+            "- customer_pain_points[].severity: low, medium, high.\n"
+            "- agent_actions[].action_type: clarify, explain, apologize, resolve, escalate, follow_up, other.\n"
+            "- commitments[].owner: Nhân viên, Khách hàng, Chưa xác định.\n"
+            "- outcome.status: resolved, unresolved, follow_up_required, unclear.\n"
             "Trả về DUY NHẤT JSON hợp lệ theo schema:\n"
             "{\n"
             '  "customer_needs": [{"text": "...", "evidence_turns": [0]}],\n'
-            '  "customer_pain_points": [{"text": "...", "severity": "low|medium|high", "evidence_turns": [0]}],\n'
-            '  "agent_actions": [{"text": "...", "action_type": "clarify|explain|apologize|resolve|escalate|follow_up|other", "evidence_turns": [1]}],\n'
-            '  "commitments": [{"owner": "Nhân viên|Khách hàng|Chưa xác định", "commitment": "...", "deadline": null, "evidence_turns": [2]}],\n'
-            '  "outcome": {"status": "resolved|unresolved|follow_up_required|unclear", "description": "...", "evidence_turns": [3]},\n'
+            '  "customer_pain_points": [{"text": "...", "severity": "medium", "evidence_turns": [0]}],\n'
+            '  "agent_actions": [{"text": "...", "action_type": "clarify", "evidence_turns": [1]}],\n'
+            '  "commitments": [{"owner": "Nhân viên", "commitment": "...", "deadline": null, "evidence_turns": [2]}],\n'
+            '  "outcome": {"status": "unclear", "description": "...", "evidence_turns": [3]},\n'
             '  "important_moments": [{"title": "...", "description": "...", "time_range": "mm:ss-mm:ss", "evidence_turns": [0, 1]}]\n'
             "}\n\n"
             f"Transcript:\n{transcript_text}"
         )
-        data = self._parse_json_object(self._call_llm(base_url, prompt))
+        data = self._call_llm_json(base_url, prompt)
         valid_indexes = self._valid_indexes(transcript)
         return {
             "customer_needs": self._sanitize_fact_items(data.get("customer_needs"), valid_indexes, limit=8),
@@ -677,6 +684,9 @@ class LlmTextAnalyticsClient:
             "- Không đưa intro/outro podcast/quảng cáo vào summary.\n"
             "- Nếu không có action item hoặc rủi ro, trả mảng rỗng.\n"
             "- evidence_turns phải là Index xuất hiện trong transcript, giữ nguyên số Index gốc.\n\n"
+            "Allowed values:\n"
+            "- action_items[].owner: Nhân viên, Khách hàng, Chưa xác định.\n"
+            "- action_items[].priority: low, medium, high.\n"
             "Trả về DUY NHẤT JSON hợp lệ:\n"
             "{\n"
             '  "summary": ["ý chính 1", "ý chính 2", "ý chính 3"],\n'
@@ -689,13 +699,13 @@ class LlmTextAnalyticsClient:
             '    "agent_actions": ["..."],\n'
             '    "outcome": "...",\n'
             '    "next_steps": ["..."],\n'
-            '    "action_items": [{"owner": "Nhân viên|Khách hàng|Chưa xác định", "task": "...", "deadline": null, "priority": "low|medium|high", "evidence_turns": [0]}],\n'
+            '    "action_items": [{"owner": "Nhân viên", "task": "...", "deadline": null, "priority": "medium", "evidence_turns": [0]}],\n'
             '    "risks_or_escalations": ["..."]\n'
             "  }\n"
             "}\n\n"
             f"Facts:\n{facts_text}\n\nTranscript:\n{transcript_text}"
         )
-        data = self._parse_json_object(self._call_llm(base_url, prompt))
+        data = self._call_llm_json(base_url, prompt)
         return self._sanitize_summary_result(data, transcript, facts)
 
     def _evaluate_agent_performance(self, base_url: str, transcript_text: str, facts: dict, summary_result: dict, transcript: list[dict]) -> dict:
@@ -714,8 +724,9 @@ class LlmTextAnalyticsClient:
             "- agent_advice phải là khuyến nghị hành động liên quan trực tiếp tới điểm yếu trong quality_notes; không viết lời cảm ơn/quảng cáo/podcast hoặc câu chung chung.\n\n"
             f"Rubric:\n{rubric}\n\n"
             "Trả về DUY NHẤT JSON hợp lệ:\n"
+            "Allowed values: sentiment chỉ được là positive, neutral hoặc negative.\n"
             "{\n"
-            '  "sentiment": "positive|neutral|negative",\n'
+            '  "sentiment": "neutral",\n'
             '  "sentiment_reason": "lý do cụ thể bằng tiếng Việt",\n'
             '  "confidence": 0.92,\n'
             '  "agent_score": 86,\n'
@@ -732,7 +743,7 @@ class LlmTextAnalyticsClient:
             "}\n\n"
             f"Facts:\n{facts_text}\n\nSummary:\n{summary_text}\n\nTranscript:\n{transcript_text}"
         )
-        data = self._parse_json_object(self._call_llm(base_url, prompt))
+        data = self._call_llm_json(base_url, prompt)
         return self._sanitize_evaluation(data, transcript)
 
     def _compose_structured_result(self, transcript: list[dict], facts: dict, summary_result: dict, evaluation: dict) -> dict:
@@ -1137,10 +1148,39 @@ class LlmTextAnalyticsClient:
             raise ValueError("LLM response JSON root must be an object")
         return parsed
 
+    def _call_llm_json(self, base_url: str, prompt: str) -> dict:
+        """
+        Calls the LLM for a JSON object and repairs malformed JSON once.
+
+        Local small models often follow the semantic task but produce syntax errors
+        such as missing commas or prose around the object. Keep repair generic so all
+        JSON-based prompts benefit without transcript-specific heuristics.
+        """
+        content = self._call_llm(base_url, prompt, json_mode=True)
+        try:
+            return self._parse_json_object(content)
+        except Exception as parse_exc:
+            logger.warning(f"LLM returned malformed JSON. Attempting one repair pass: {parse_exc}")
+
+        repair_prompt = (
+            "Bạn là bộ sửa định dạng JSON. Nhiệm vụ duy nhất: chuyển nội dung dưới đây thành MỘT JSON object hợp lệ.\n"
+            "Quy tắc:\n"
+            "- Không thêm thông tin mới.\n"
+            "- Giữ nguyên ý nghĩa và các field đang có.\n"
+            "- Sửa lỗi cú pháp như thiếu dấu phẩy, trailing comma, markdown fence, text ngoài JSON, hoặc value enum viết sai kiểu schema.\n"
+            "- Nếu một giá trị không thể khôi phục chắc chắn, dùng null, mảng rỗng hoặc object rỗng phù hợp.\n"
+            "- Trả về duy nhất JSON object hợp lệ, không giải thích.\n\n"
+            f"Nội dung cần sửa:\n{content}"
+        )
+        repaired = self._call_llm(base_url, repair_prompt, json_mode=True)
+        return self._parse_json_object(repaired)
+
     def _analysis_metadata(self, mode: str) -> dict:
+        provider = self._last_provider or {}
         return {
             "summary_version": settings.llm_analysis_pipeline_version,
-            "model_name": settings.llm_model,
+            "model_name": provider.get("model") or self._provider_summary(),
+            "llm_provider": provider.get("name"),
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pipeline_mode": mode,
             "facts_prompt_version": "v1",
@@ -1219,20 +1259,80 @@ class LlmTextAnalyticsClient:
     # Shared helpers
     # ─────────────────────────────────────────────
     def _get_base_url(self) -> str:
-        base_url = settings.llm_base_url.strip()
+        providers = self._llm_providers()
+        if not providers:
+            logger.warning("No LLM provider configured. Analysis will fall back to deterministic defaults.")
+            return "unconfigured"
+        logger.info(
+            "Configured LLM provider chain: "
+            + " -> ".join(f"{provider['name']}({provider['model']} @ {provider['base_url']})" for provider in providers)
+        )
+        return "provider-chain"
+
+    def _normalize_base_url(self, base_url: str) -> str:
+        base_url = base_url.strip()
         if not (base_url.startswith("http://") or base_url.startswith("https://")):
             base_url = f"http://{base_url}"
-        logger.info(f"Connecting to LLM endpoint: {base_url} (Model: {settings.llm_model})")
         return base_url
 
-    def _call_llm(self, base_url: str, prompt: str) -> str:
+    def _llm_providers(self) -> list[dict]:
+        providers = []
+        if settings.llm_api_base_url.strip() and settings.llm_api_model.strip():
+            providers.append({
+                "name": "LLM_API",
+                "base_url": self._normalize_base_url(settings.llm_api_base_url),
+                "model": settings.llm_api_model.strip(),
+                "api_key": settings.llm_api_key.strip(),
+            })
+        if settings.llm_local_base_url.strip() and settings.llm_local_model.strip():
+            providers.append({
+                "name": "LLM_LOCAL",
+                "base_url": self._normalize_base_url(settings.llm_local_base_url),
+                "model": settings.llm_local_model.strip(),
+                "api_key": settings.llm_local_api_key.strip(),
+            })
+        if not providers and settings.llm_base_url.strip() and settings.llm_model.strip():
+            providers.append({
+                "name": "LLM_LEGACY",
+                "base_url": self._normalize_base_url(settings.llm_base_url),
+                "model": settings.llm_model.strip(),
+                "api_key": settings.llm_api_key.strip(),
+            })
+        return providers
+
+    def _provider_summary(self) -> str:
+        providers = self._llm_providers()
+        return " -> ".join(provider["model"] for provider in providers) if providers else "unconfigured"
+
+    def _call_llm(self, base_url: str, prompt: str, json_mode: bool = False) -> str:
         """
-        Calls the remote LLM API (OpenAI-compatible /chat/completions) and returns
-        the raw text content of the assistant's reply, with markdown fences stripped.
-        Raises RuntimeError on HTTP or JSON errors.
+        Calls configured OpenAI-compatible LLM providers and returns the raw text
+        content of the first successful assistant reply.
         """
+        providers = self._llm_providers()
+        if not providers:
+            raise RuntimeError("No LLM provider configured. Set LLM_API_* or LLM_LOCAL_* variables.")
+
+        errors = []
+        for idx, provider in enumerate(providers):
+            try:
+                return self._call_llm_provider(provider, prompt, json_mode=json_mode)
+            except RuntimeError as exc:
+                errors.append(f"{provider['name']}: {exc}")
+                next_provider = providers[idx + 1]["name"] if idx + 1 < len(providers) else None
+                if next_provider:
+                    logger.error(
+                        f"{provider['name']} provider failed. Falling back to {next_provider}. "
+                        f"Reason: {exc}"
+                    )
+                else:
+                    logger.error(f"{provider['name']} provider failed and no fallback provider remains. Reason: {exc}")
+
+        raise RuntimeError("All LLM providers failed: " + " | ".join(errors))
+
+    def _call_llm_provider(self, provider: dict, prompt: str, json_mode: bool = False) -> str:
         payload = {
-            "model": settings.llm_model,
+            "model": provider["model"],
             "messages": [
                 {
                     "role": "system",
@@ -1247,18 +1347,32 @@ class LlmTextAnalyticsClient:
             ],
             "temperature": 0.1,
         }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         headers = {}
-        if settings.llm_api_key:
-            headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+        if provider["api_key"]:
+            headers["Authorization"] = f"Bearer {provider['api_key']}"
 
+        url = f"{provider['base_url'].rstrip('/')}/chat/completions"
+        logger.info(
+            f"Calling {provider['name']} provider: endpoint={provider['base_url']} "
+            f"model={provider['model']} timeout={settings.llm_api_timeout_seconds}s"
+        )
         try:
-            with httpx.Client(timeout=300) as client:
-                url = f"{base_url.rstrip('/')}/chat/completions"
+            with httpx.Client(timeout=settings.llm_api_timeout_seconds) as client:
                 response = client.post(url, json=payload, headers=headers)
+                if json_mode and response.status_code in {400, 404, 422}:
+                    logger.warning(
+                        f"{provider['name']} provider rejected response_format=json_object. "
+                        "Retrying the same prompt without JSON mode."
+                    )
+                    payload.pop("response_format", None)
+                    response = client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
 
             content = response.json()["choices"][0]["message"]["content"].strip()
-            logger.info("Successfully received response from LLM model.")
+            self._last_provider = provider
+            logger.info(f"Successfully received response from {provider['name']} model.")
 
             # Strip potential markdown fences (```json ... ```)
             if content.startswith("```"):
@@ -1272,11 +1386,17 @@ class LlmTextAnalyticsClient:
             return content
 
         except httpx.HTTPError as http_exc:
-            logger.error(f"LLM API HTTP request failed: {str(http_exc)}")
-            raise RuntimeError(f"LLM API call failed: {str(http_exc)}") from http_exc
+            if isinstance(http_exc, httpx.TimeoutException):
+                logger.error(
+                    f"{provider['name']} provider timed out after "
+                    f"{settings.llm_api_timeout_seconds}s: {str(http_exc)}"
+                )
+                raise RuntimeError(f"timed out after {settings.llm_api_timeout_seconds}s") from http_exc
+            logger.error(f"{provider['name']} provider HTTP request failed: {str(http_exc)}")
+            raise RuntimeError(f"HTTP call failed: {str(http_exc)}") from http_exc
         except json.JSONDecodeError as json_exc:
-            logger.error(f"Failed to parse LLM response as JSON.")
+            logger.error(f"Failed to parse {provider['name']} provider HTTP response as JSON.")
             raise RuntimeError(f"Invalid JSON returned from LLM: {str(json_exc)}") from json_exc
         except Exception as exc:
-            logger.error(f"Unexpected error during LLM call: {str(exc)}")
-            raise
+            logger.error(f"Unexpected error during {provider['name']} provider call: {str(exc)}")
+            raise RuntimeError(str(exc)) from exc

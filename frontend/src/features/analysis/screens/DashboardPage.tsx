@@ -42,6 +42,7 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
     loadStats,
     // MinIO file management
     userFiles,
+    filesTotal,
     filesLoading,
     filesError,
     loadUserFiles,
@@ -137,8 +138,8 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                   <span>File của tôi</span>
-                  {userFiles.length > 0 && (
-                    <span style={{ marginLeft: 'auto', background: 'rgba(139,92,246,0.2)', color: 'var(--color-primary)', borderRadius: '99px', fontSize: '0.7rem', padding: '1px 6px', fontWeight: 700 }}>{userFiles.length}</span>
+                  {filesTotal > 0 && (
+                    <span style={{ marginLeft: 'auto', background: 'rgba(139,92,246,0.2)', color: 'var(--color-primary)', borderRadius: '99px', fontSize: '0.7rem', padding: '1px 6px', fontWeight: 700 }}>{filesTotal}</span>
                   )}
                 </div>
                 {isAdmin && onGoToAdmin && (
@@ -361,8 +362,25 @@ export function DashboardPage({ isAdmin = false, onGoToAdmin }: { isAdmin?: bool
                 style={{ position: 'relative' }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                {userFiles.length > 0 && (
-                  <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', background: 'var(--color-primary)', borderRadius: '50%' }} />
+                {filesTotal > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    minWidth: '16px',
+                    height: '16px',
+                    padding: '0 4px',
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    borderRadius: '99px',
+                    fontSize: '0.62rem',
+                    fontWeight: 800,
+                    lineHeight: '16px',
+                    textAlign: 'center',
+                    boxShadow: '0 0 0 2px rgba(10, 10, 18, 0.95)',
+                  }}>
+                    {filesTotal > 99 ? '99+' : filesTotal}
+                  </span>
                 )}
               </div>
               {isAdmin && onGoToAdmin && (

@@ -119,6 +119,11 @@ def upgrade() -> None:
         sa.Column('owner_id', sa.String(length=36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('last_heartbeat_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('failed_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('attempt_count', sa.Integer(), server_default='0', nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
     

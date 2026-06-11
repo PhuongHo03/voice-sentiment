@@ -18,7 +18,7 @@ class RabbitMqAnalysisConsumer:
     def start(self) -> None:
         logger.info(f"Connecting to RabbitMQ Broker: '{settings.rabbitmq_url}'...")
         params = pika.URLParameters(settings.rabbitmq_url)
-        params.heartbeat = 0  # Disable heartbeats to prevent timeouts during long voice transcription HTTP calls
+        params.heartbeat = 0  # Avoid heartbeat drops while blocking on long STT/LLM calls.
         connection = pika.BlockingConnection(params)
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)

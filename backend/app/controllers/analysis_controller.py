@@ -90,6 +90,15 @@ def get_analysis(
     return _analysis_service(session).get_analysis(job_id, current_user)
 
 
+@router.post("/{job_id}/retry", response_model=JobStatusResponse)
+def retry_session(
+    job_id: str,
+    session: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return _analysis_service(session).retry_session(job_id, current_user)
+
+
 @router.patch("/{job_id}", response_model=JobStatusResponse)
 def rename_session(
     job_id: str,

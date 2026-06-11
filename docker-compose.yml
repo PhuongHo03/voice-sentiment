@@ -214,13 +214,18 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-voice-audio}
       VOICE_SERVER_URL: ${VOICE_SERVER_URL}
-      LLM_BASE_URL: ${LLM_BASE_URL}
-      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_BASE_URL: ${LLM_API_BASE_URL:-}
+      LLM_API_MODEL: ${LLM_API_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY}
+      LLM_LOCAL_BASE_URL: ${LLM_LOCAL_BASE_URL:-http://ollama:11434/v1}
+      LLM_LOCAL_MODEL: ${LLM_LOCAL_MODEL:-qwen2.5:1.5b}
+      LLM_LOCAL_API_KEY: ${LLM_LOCAL_API_KEY:-}
       ENABLE_DETAILED_SUMMARY: ${ENABLE_DETAILED_SUMMARY:-true}
       LLM_ANALYSIS_PIPELINE_VERSION: ${LLM_ANALYSIS_PIPELINE_VERSION:-v2_structured_pipeline}
       MAX_SUMMARY_TOPICS: ${MAX_SUMMARY_TOPICS:-8}
       MAX_ACTION_ITEMS: ${MAX_ACTION_ITEMS:-8}
+      LLM_API_TIMEOUT_SECONDS: ${LLM_API_TIMEOUT_SECONDS:-300}
+      VOICE_TRANSCRIPTION_TIMEOUT_SECONDS: ${VOICE_TRANSCRIPTION_TIMEOUT_SECONDS:-1800}
       RABBITMQ_QUEUE_COUNT: ${RABBITMQ_QUEUE_COUNT:-1}
     restart: always
     expose:
@@ -248,8 +253,8 @@ services:
       ollama serve &
       PID=$$!;
       sleep 5;
-      echo 'Checking and pulling ${LLM_MODEL:-qwen2.5:1.5b} model...';
-      ollama pull ${LLM_MODEL:-qwen2.5:1.5b};
+      echo 'Checking and pulling ${LLM_LOCAL_MODEL:-qwen2.5:1.5b} model...';
+      ollama pull ${LLM_LOCAL_MODEL:-qwen2.5:1.5b};
       wait $$PID;
       "
 

@@ -1,11 +1,13 @@
 import logging
 import time
 import httpx
+import threading
 from app.configs.config import settings
 from app.configs.metrics import LLM_ANALYTICS_REQUESTS_TOTAL, LLM_JOB_DURATION_SECONDS, LLM_JOBS_TOTAL, LLM_VOICE_REQUESTS_TOTAL
 from app.ai.llm_client import LlmTextAnalyticsClient
 from app.configs.cache import RedisJobCache
 from app.repositories.analysis_repository import SqlAlchemyAnalysisRepository
+from app.configs.database import SessionLocal
 from app.configs.storage import MinioAudioStorage
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ class AnalyzeJob:
         logger.info(f"Starting orchestration execution for Job ID: {job_id} (Input Type: {input_type})")
 
         self.repository.mark_processing(job_id)
+        stop_heartbeat = threading.Event()
+        heartbeat_thread = self._start_heartbeat(job_id, stop_heartbeat)
         self.cache.set_status(job_id, {"job_id": job_id, "status": "processing"}, owner_id=owner_id)
         
         try:
@@ -45,7 +49,7 @@ class AnalyzeJob:
                 
                 files = {'file': (message.get("audio_object_key", "audio.wav"), audio, 'audio/wav')}
                 try:
-                    with httpx.Client(timeout=1800) as client:
+                    with httpx.Client(timeout=settings.voice_transcription_timeout_seconds) as client:
                         response = client.post(voice_url, files=files)
                         response.raise_for_status()
                         result_data = response.json()
@@ -89,3 +93,19 @@ class AnalyzeJob:
             self.repository.save_failed(job_id, str(exc))
             self.cache.set_status(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)}, owner_id=owner_id)
             raise
+        finally:
+            stop_heartbeat.set()
+            heartbeat_thread.join(timeout=2)
+
+    def _start_heartbeat(self, job_id: str, stop_event: threading.Event) -> threading.Thread:
+        def _beat() -> None:
+            while not stop_event.wait(60):
+                try:
+                    with SessionLocal() as session:
+                        SqlAlchemyAnalysisRepository(session).touch_heartbeat(job_id)
+                except Exception as heartbeat_err:
+                    logger.warning(f"Failed to update heartbeat for Job ID {job_id}: {heartbeat_err}")
+
+        thread = threading.Thread(target=_beat, name=f"job-heartbeat-{job_id}", daemon=True)
+        thread.start()
+        return thread

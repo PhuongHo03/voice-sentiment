@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
@@ -9,6 +10,9 @@ from app.models.models import UserModel
 from app.repositories.analysis_repository import SqlAlchemyAnalysisRepository
 
 logger = logging.getLogger(__name__)
+JOB_STUCK_TIMEOUT_SECONDS = 30 * 60
+JOB_RECOVERY_INTERVAL_SECONDS = 5 * 60
+MAX_JOB_ATTEMPTS = 3
 
 
 class AnalysisService:
@@ -99,6 +103,38 @@ class AnalysisService:
         result = self.repository.get_result(job_id)
         return self._job_payload(job, result)
 
+    def retry_session(self, job_id: str, current_user: UserModel) -> dict:
+        job = self._get_authorized_job(job_id, current_user)
+        result = self.repository.get_result(job_id)
+        if result:
+            raise HTTPException(status_code=400, detail="Completed jobs with results cannot be retried")
+        if job.status == "processing" and not self._is_stuck(job):
+            raise HTTPException(status_code=409, detail="Job is still actively processing")
+        if job.status not in {"failed", "processing"}:
+            raise HTTPException(status_code=400, detail="This job cannot be retried")
+        if (job.attempt_count or 0) >= MAX_JOB_ATTEMPTS:
+            raise HTTPException(status_code=400, detail="Maximum retry attempts reached")
+
+        retried = self._requeue_job(job)
+        return self._job_payload(retried, None)
+
+    def recover_stuck_jobs(self, limit: int = 50) -> int:
+        jobs = self.repository.get_stuck_processing_jobs(
+            stale_after_seconds=JOB_STUCK_TIMEOUT_SECONDS,
+            max_attempts=MAX_JOB_ATTEMPTS,
+            limit=limit,
+        )
+        recovered = 0
+        for job in jobs:
+            try:
+                self._requeue_job(job)
+                recovered += 1
+            except Exception as exc:
+                logger.error(f"Failed to requeue stuck job {job.id}: {exc}")
+        if recovered:
+            logger.warning(f"Recovered {recovered} stuck analysis job(s).")
+        return recovered
+
     def rename_session(self, job_id: str, name: str, current_user: UserModel) -> dict:
         self._get_authorized_job(job_id, current_user)
         job = self.repository.update_job_name(job_id, name)
@@ -130,6 +166,34 @@ class AnalysisService:
             self._cache().set_status(job_id, {"job_id": job_id, "status": "pending"}, owner_id=owner_id)
         except Exception as e:
             logger.warning(f"Failed to cache pending job {job_id}: {e}")
+
+    def _requeue_job(self, job) -> object:
+        payload = self._job_message(job)
+        retried = self.repository.reset_job_for_retry(str(job.id))
+        if retried is None:
+            raise HTTPException(status_code=404, detail="Analysis job not found")
+        self.publisher.publish(payload, owner_id=retried.owner_id)
+        self._cache_pending(str(retried.id), owner_id=retried.owner_id)
+        if retried.owner_id:
+            try:
+                self._cache().delete_stats(retried.owner_id)
+            except Exception:
+                pass
+        return retried
+
+    def _job_message(self, job) -> dict:
+        payload = {"job_id": str(job.id), "input_type": job.input_type, "owner_id": job.owner_id}
+        if job.input_type == "audio":
+            if not job.audio_object_key:
+                raise HTTPException(status_code=400, detail="Audio job is missing object key")
+            payload["audio_object_key"] = job.audio_object_key
+        elif job.input_type == "text":
+            if not job.submitted_text:
+                raise HTTPException(status_code=400, detail="Text job is missing submitted text")
+            payload["text"] = job.submitted_text
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported job input type")
+        return payload
 
     def _cache(self) -> RedisJobCache:
         if self.cache is None:
@@ -166,6 +230,15 @@ class AnalysisService:
             "result": result_payload,
             "error_message": job.error_message,
         }
+
+    def _is_stuck(self, job) -> bool:
+        marker = job.last_heartbeat_at or job.started_at or job.updated_at
+        if marker is None:
+            return True
+        if marker.tzinfo is None:
+            marker = marker.replace(tzinfo=timezone.utc)
+        age_seconds = (datetime.now(timezone.utc) - marker).total_seconds()
+        return age_seconds >= JOB_STUCK_TIMEOUT_SECONDS
 
 
 class SubmitAudioAnalysis:

@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import AnalysisJobModel, AnalysisResultModel
@@ -11,6 +12,18 @@ class SqlAlchemyAnalysisRepository:
         job = self.session.get(AnalysisJobModel, job_id)
         if job:
             job.status = "processing"
+            job.started_at = func.now()
+            job.last_heartbeat_at = func.now()
+            job.completed_at = None
+            job.failed_at = None
+            job.error_message = None
+            job.attempt_count = (job.attempt_count or 0) + 1
+            self.session.commit()
+
+    def touch_heartbeat(self, job_id: str) -> None:
+        job = self.session.get(AnalysisJobModel, job_id)
+        if job and job.status == "processing":
+            job.last_heartbeat_at = func.now()
             self.session.commit()
 
     def save_completed(self, job_id: str, result: dict) -> None:
@@ -49,6 +62,9 @@ class SqlAlchemyAnalysisRepository:
             
         job.status = "completed"
         job.error_message = None
+        job.completed_at = func.now()
+        job.failed_at = None
+        job.last_heartbeat_at = func.now()
         self.session.commit()
 
     def save_failed(self, job_id: str, message: str) -> None:
@@ -56,4 +72,6 @@ class SqlAlchemyAnalysisRepository:
         if job:
             job.status = "failed"
             job.error_message = message
+            job.failed_at = func.now()
+            job.last_heartbeat_at = func.now()
             self.session.commit()

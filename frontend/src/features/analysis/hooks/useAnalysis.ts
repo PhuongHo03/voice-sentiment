@@ -48,6 +48,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
 
   // MinIO File Storage state
   const [userFiles, setUserFiles] = useState<MinioFile[]>([]);
+  const [filesTotal, setFilesTotal] = useState(0);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
 
@@ -92,6 +93,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
       const authToken = requireToken();
       const data = await listUserFiles(authToken);
       setUserFiles(data.files);
+      setFilesTotal(data.total ?? data.files.length);
     } catch (err) {
       console.error('Lỗi tải file từ MinIO:', err);
       setFilesError(err instanceof Error ? err.message : 'Không thể tải danh sách file');
@@ -99,6 +101,15 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
       setFilesLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setUserFiles([]);
+      setFilesTotal(0);
+      return;
+    }
+    loadUserFiles();
+  }, [token, loadUserFiles]);
 
   // 1. Fetch sessions list on mount
   useEffect(() => {
@@ -240,6 +251,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
     const result = await uploadFileOnly(file, authToken);
     // Optimistically prepend the new file to the list so UI updates immediately
     setUserFiles(prev => [createUploadedFileItem(result), ...prev]);
+    setFilesTotal(prev => prev + 1);
     return result;
   }
 
@@ -290,6 +302,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
       const uploaded = await uploadFileOnly(file, authToken);
       // Optimistically add to file list
       setUserFiles(prev => [createUploadedFileItem(uploaded), ...prev]);
+      setFilesTotal(prev => prev + 1);
 
       // Step 2: create analysis job from key
       const job = await submitAudioFromKey(uploaded.object_key, file.name, authToken);
@@ -394,6 +407,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
       const authToken = requireToken();
       await deleteUserFile(objectKey, authToken);
       setUserFiles(prev => prev.filter(f => f.object_key !== objectKey));
+      setFilesTotal(prev => Math.max(0, prev - 1));
     } catch (err) {
       alert('Không thể xóa file: ' + (err instanceof Error ? err.message : 'Lỗi không xác định'));
     }
@@ -479,6 +493,7 @@ export function useDashboardAnalysis(token: string | null, isAdmin: boolean = fa
     loadStats,
     // MinIO file management
     userFiles,
+    filesTotal,
     filesLoading,
     filesError,
     loadUserFiles,
